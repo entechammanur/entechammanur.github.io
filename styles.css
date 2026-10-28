@@ -641,6 +641,17 @@ h1 {
   letter-spacing: 0.08em;
 }
 
+.directory-card {
+  will-change: transform;
+}
+
+.primary,
+.filter,
+.waypoint-action,
+.map-footer button {
+  will-change: transform;
+}
+
 .no-results {
   color: #516258;
   padding: 10px 0;
@@ -674,6 +685,20 @@ footer strong {
 @media (max-width: 720px) {
   .container {
     padding: 0 20px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 
   .nav {

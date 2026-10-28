@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
 
-const townCenter = [10.6724, 76.0084];
+const townCenter = [10.67449, 76.01306];
 const route = [
-  [10.67287, 75.99524],
-  [10.67217, 75.99541],
-  [10.6742, 76.0048],
-  [10.6745, 76.012],
-  [10.6711, 76.0215],
+  [10.670849, 76.002072],
+  [10.675411, 76.020533],
+  [10.677212, 76.024398],
 ];
 
 const locations = {
-  sbi: { coordinates: [10.6728718, 75.9952439], label: 'State Bank of India', note: 'Moonnamkallu, Althara' },
-  school: { coordinates: [10.6711057, 76.0214967], label: 'Amal English School', note: 'Chammanoor' },
-  post: { coordinates: [10.6721701, 75.995414], label: 'Punnayurkulam Post Office', note: 'Moonnamkallu, Althara · PIN 679561' },
+  attupuram: { coordinates: [10.670849, 76.002072], label: 'Attupuram Centre', note: 'Verified coordinate supplied by you' },
+  chammanoor: { coordinates: [10.675411, 76.020533], label: 'Chammanoor Centre', note: 'Verified coordinate supplied by you' },
+  school: { coordinates: [10.677212, 76.024398], label: 'Amal English School', note: 'Verified coordinate supplied by you' },
 };
 
 function MapFocus({ activeStop }) {

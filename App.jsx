@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import TownMap from './components/TownMap';
 
-const stops = ['sbi', 'school', 'post'];
+const stops = ['attupuram', 'chammanoor', 'school'];
 const stopMeta = {
-  sbi: { label: 'State Bank of India', tagline: 'Punnayurkulam branch · Your first landmark on the road into town.' },
-  school: { label: 'Amal English School', tagline: 'Where the next generation of chammanur begins their day.' },
-  post: { label: 'Punnayurkulam Post Office', tagline: 'PIN 679561 · A small place that connects us to everywhere.' },
+  attupuram: { label: 'Attupuram Centre', tagline: '10.670849, 76.002072 · A verified point on your local route.' },
+  chammanoor: { label: 'Chammanoor Centre', tagline: '10.675411, 76.020533 · The heart of the town experience.' },
+  school: { label: 'Amal English School', tagline: '10.677212, 76.024398 · A verified landmark supplied by you.' },
 };
 
 const directoryData = [
@@ -17,8 +18,18 @@ const directoryData = [
   ['Transport', 'Auto / Taxi Stand', 'Add contact and stand location'],
 ];
 
+const reveal = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } },
+};
+
+const stagger = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.09 } },
+};
+
 export default function App() {
-  const [activeStop, setActiveStop] = useState('sbi');
+  const [activeStop, setActiveStop] = useState('attupuram');
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
 
@@ -55,34 +66,39 @@ export default function App() {
               <a href="#contact">Contribute</a>
             </nav>
 
-            <button className="menu" type="button" aria-label="Open menu">
+            <motion.button className="menu" type="button" aria-label="Open menu" whileTap={{ scale: 0.88 }}>
               ☰
-            </button>
+            </motion.button>
           </div>
 
-          <div className="hero-content">
-            <div className="eyebrow">A living map of Kerala · 10°40′N 76°02′E</div>
-            <h1>
+          <motion.div
+            className="hero-content"
+            initial="hidden"
+            animate="visible"
+            variants={stagger}
+          >
+            <motion.div className="eyebrow" variants={reveal}>A living map of Kerala · 10°40′N 76°02′E</motion.div>
+            <motion.h1 variants={reveal}>
               Find your way
               <br />
               back home.
-            </h1>
-            <p className="hero-copy">
+            </motion.h1>
+            <motion.p className="hero-copy" variants={reveal}>
               A new way to experience chammanur — its green roads, familiar landmarks and the people who
               make this place feel like home.
-            </p>
-            <a className="primary" href="#journey">
+            </motion.p>
+            <motion.a className="primary" href="#journey" variants={reveal} whileHover={{ y: -4, scale: 1.03 }} whileTap={{ scale: 0.97 }}>
               Start the journey
-            </a>
-          </div>
+            </motion.a>
+          </motion.div>
         </div>
         <div className="scroll-cue">Scroll to explore</div>
       </header>
 
       <main>
-        <section className="explore" id="journey">
+        <motion.section className="explore" id="journey" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.18 }} variants={stagger}>
           <div className="container">
-            <div className="explore-head">
+            <motion.div className="explore-head" variants={reveal}>
               <div>
                 <div className="kicker">01 / Roaming around town</div>
                 <h2 className="title">
@@ -94,13 +110,13 @@ export default function App() {
               <p>
                 Follow the road from Punnayurkulam Junction into the heart of our town. Tap a marker to pause.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="map-stage" id="map">
+            <motion.div className="map-stage" id="map" variants={reveal}>
               <div className="map-ui">
                 <div className="map-status">
                   <i className="live"></i>
-                  Live route · 3 landmarks
+                  Live route · 3 verified landmarks
                 </div>
               </div>
 
@@ -110,20 +126,23 @@ export default function App() {
                 <p>
                   Currently exploring: <strong>{stopMeta[activeStop].label}</strong>
                 </p>
-                <button type="button" onClick={moveToNextStop}>
+                <motion.button type="button" onClick={moveToNextStop} whileHover={{ x: 5 }} whileTap={{ scale: 0.96 }}>
                   Next stop&nbsp; →
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="waypoints" id="waypointList">
+            <motion.div className="waypoints" id="waypointList" variants={stagger}>
               {stops.map((key, index) => (
-                <article
+                <motion.article
                   key={key}
                   className="waypoint"
                   data-card={key}
                   style={{ opacity: activeStop === key ? 1 : 0.48 }}
                   onClick={() => setActiveStop(key)}
+                  variants={reveal}
+                  whileHover={{ x: 8, opacity: 1 }}
+                  transition={{ duration: 0.22 }}
                 >
                   <div className="waypoint-number">
                     {String(index + 1).padStart(2, '0')} — {index === 0 ? 'FIRST STOP' : index === 1 ? 'THE HEART' : 'KEEP IN TOUCH'}
@@ -132,18 +151,18 @@ export default function App() {
                     <h3>{stopMeta[key].label}</h3>
                     <p>{stopMeta[key].tagline}</p>
                   </div>
-                  <button className="waypoint-action" type="button" aria-label={`Show ${stopMeta[key].label} on map`}>
+                  <motion.button className="waypoint-action" type="button" aria-label={`Show ${stopMeta[key].label} on map`} whileHover={{ rotate: 45 }} whileTap={{ scale: 0.88 }}>
                     ↗
-                  </button>
-                </article>
+                  </motion.button>
+                </motion.article>
               ))}
-            </div>
+            </motion.div>
           </div>
-        </section>
+        </motion.section>
 
-        <section className="directory" id="directory">
+        <motion.section className="directory" id="directory" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.16 }} variants={stagger}>
           <div className="container">
-            <div className="directory-header">
+            <motion.div className="directory-header" variants={reveal}>
               <div>
                 <div className="kicker">02 / Find your people</div>
                 <h2 className="title">
@@ -153,57 +172,72 @@ export default function App() {
                 </h2>
               </div>
               <p>Useful places, familiar faces and everything you need — all in one place.</p>
-            </div>
+            </motion.div>
 
-            <input
+            <motion.input
               className="search"
               type="search"
               placeholder="Search the directory…"
               aria-label="Search the directory"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              variants={reveal}
+              whileFocus={{ scale: 1.01 }}
             />
 
-            <div className="filters">
+            <motion.div className="filters" variants={reveal}>
               {categories.map((item) => (
-                <button
+                <motion.button
                   key={item}
                   type="button"
                   className={`filter ${category === item ? 'active' : ''}`}
                   onClick={() => setCategory(item)}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   {item}
-                </button>
+                </motion.button>
               ))}
-            </div>
+            </motion.div>
 
-            <div className="directory-grid">
+            <motion.div className="directory-grid" variants={stagger}>
+              <AnimatePresence mode="popLayout">
               {filteredData.length > 0 ? (
                 filteredData.map(([group, title, description]) => (
-                  <article key={`${group}-${title}`} className="directory-card">
+                  <motion.article
+                    key={`${group}-${title}`}
+                    className="directory-card"
+                    variants={reveal}
+                    initial="hidden"
+                    animate="visible"
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    layout
+                    whileHover={{ y: -7, boxShadow: '0 18px 34px rgba(23, 59, 49, 0.11)' }}
+                  >
                     <div className="kicker">{group}</div>
                     <h3>{title}</h3>
                     <p>{description}</p>
                     <small>Explore listing&nbsp; ↗</small>
-                  </article>
+                  </motion.article>
                 ))
               ) : (
-                <p className="no-results">No listings found. Try another search.</p>
+                <motion.p className="no-results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>No listings found. Try another search.</motion.p>
               )}
-            </div>
+              </AnimatePresence>
+            </motion.div>
           </div>
-        </section>
+        </motion.section>
 
-        <section id="stories" className="stories">
+        <motion.section id="stories" className="stories" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }} transition={{ duration: 0.9 }}>
           <div className="container">
             <div className="kicker">03 / A place with stories</div>
-            <h2 className="title title-story">
+            <motion.h2 className="title title-story" initial={{ y: 24 }} whileInView={{ y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, ease: 'easeOut' }}>
               Every road has
               <br />
               <em>a memory.</em>
-            </h2>
+            </motion.h2>
           </div>
-        </section>
+        </motion.section>
       </main>
 
       <footer id="contact">
