@@ -17,12 +17,17 @@ export default function ContentAdmin({ session, section = 'settings' }) {
   const [listings, setListings] = useState([]);
   const [editingListingId, setEditingListingId] = useState(null);
   const [resourceRows, setResourceRows] = useState({});
-  const [resource, setResource] = useState('landmarks');
+  const [resource, setResource] = useState(section === 'buses' ? 'buses' : 'landmarks');
   const [resourceDraft, setResourceDraft] = useState({});
   const [setting, setSetting] = useState({ key: '', value: '' });
   const [listing, setListing] = useState(blankListing);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (section === 'buses') setResource('buses');
+    if (section === 'town' && resource === 'buses') setResource('landmarks');
+  }, [section, resource]);
 
   const load = async () => {
     const [{ data: settingRows, error: settingsError }, { data: listingRows, error: listingsError }, ...resourceResults] = await Promise.all([
@@ -124,8 +129,8 @@ export default function ContentAdmin({ session, section = 'settings' }) {
           <button className="admin-submit" type="submit">Save setting</button>
         </form>
       </section>}
-      {section === 'town' && <section className="admin-panel">
-        <div className="admin-panel-head"><div><div className="kicker">Everything else</div><h2>Town content</h2></div><select className="admin-select" value={resource} onChange={(event) => { setResource(event.target.value); setResourceDraft({}); }}><option value="landmarks">Landmarks</option><option value="notices">Notices</option><option value="events">Events</option><option value="buses">Bus timings</option></select></div>
+      {(section === 'town' || section === 'buses') && <section className="admin-panel">
+        <div className="admin-panel-head"><div><div className="kicker">{section === 'buses' ? 'Transport information' : 'Everything else'}</div><h2>{section === 'buses' ? 'Bus timings' : 'Town content'}</h2></div>{section === 'town' && <select className="admin-select" value={resource} onChange={(event) => { setResource(event.target.value); setResourceDraft({}); }}><option value="landmarks">Landmarks</option><option value="notices">Notices</option><option value="events">Events</option><option value="buses">Bus timings</option></select>}</div>
         <form className="admin-form" onSubmit={addResource}>
           {resourceConfig[resource].fields.map((field) => field === 'is_published'
             ? <label className="admin-check" key={field}><input type="checkbox" checked={Boolean(resourceDraft[field])} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.checked })} /> Published</label>

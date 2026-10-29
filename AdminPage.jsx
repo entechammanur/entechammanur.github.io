@@ -170,6 +170,7 @@ function AdminDashboard({ session }) {
             ['settings', 'Homepage'],
             ['directory', 'Directory'],
             ['town', 'Town content'],
+            ['buses', 'Bus timings'],
             ['access', 'Access'],
           ].map(([key, label]) => (
             <button key={key} type="button" className={activeSection === key ? 'active' : ''} onClick={() => setActiveSection(key)}>
@@ -186,6 +187,7 @@ function AdminDashboard({ session }) {
             <button type="button" onClick={() => setActiveSection('settings')}><strong>Homepage</strong><span>Hero image and copy</span></button>
             <button type="button" onClick={() => setActiveSection('directory')}><strong>Directory</strong><span>Local listings and contacts</span></button>
             <button type="button" onClick={() => setActiveSection('town')}><strong>Town content</strong><span>Landmarks, notices and events</span></button>
+            <button type="button" onClick={() => setActiveSection('buses')}><strong>Bus timings</strong><span>Routes and departure schedules</span></button>
             <button type="button" onClick={() => setActiveSection('access')}><strong>Access</strong><span>Approve administrator requests</span></button>
           </div>
         </section>}
@@ -205,7 +207,7 @@ function AdminDashboard({ session }) {
             </div>
           )}
         </section>}
-        {['settings', 'directory', 'town'].includes(activeSection) && <ContentAdmin session={session} section={activeSection} />}
+        {['settings', 'directory', 'town', 'buses'].includes(activeSection) && <ContentAdmin session={session} section={activeSection} />}
         <p className="admin-muted admin-note">Changes are stored in Supabase and become available to public visitors when published.</p>
       </div>
     </main>
