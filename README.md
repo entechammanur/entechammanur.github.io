@@ -55,6 +55,9 @@ npm run preview -- --host
 - `styles.css` – all design and layout styling
 - `main.jsx` – React app entry point
 - `vite.config.js` – local dev configuration
+- `AdminPage.jsx` – Supabase login, signup request, and admin approval dashboard
+- `lib/supabase.js` – Supabase browser client configuration
+- `supabase/migrations/` – ordered SQL files to run in Supabase SQL Editor
 
 ## Notes
 
@@ -67,3 +70,53 @@ The town map uses real OpenStreetMap road and place data through Leaflet. The pl
 The Punnayurkulam Village Office Plus Code (`MXFX+W46, Punnayurkulam, Kerala 679561`) is intentionally not plotted yet because it has not been converted to a coordinate in the app. This prevents an unverified point from being displayed over a private property.
 
 Framer Motion provides the page entrance reveals, scroll-triggered section transitions, waypoint focus feedback, directory card layout animation, and button micro-interactions.
+
+The admin dashboard can now edit homepage settings, upload a new hero image to Supabase Storage, and add or delete published directory listings. Public pages load published Supabase listings and homepage settings automatically, with the current prototype content used as a fallback.
+
+Bus timings are managed from Admin → Town content → Bus timings. Published schedules appear in the public Bus timings section.
+
+## Supabase setup
+
+1. Create a Supabase project.
+2. Open the Supabase SQL Editor and run these files in order:
+
+   ```text
+   supabase/migrations/01-create-admin-access.sql
+   supabase/migrations/02-create-content-tables.sql
+   supabase/migrations/03-content-policies.sql
+   supabase/migrations/05-create-site-settings-and-storage.sql
+   supabase/migrations/06-create-bus-timings.sql
+   ```
+
+   Run `04-promote-admin-by-email.sql` separately only when promoting a real account, after replacing its email.
+
+3. Copy `.env.example` to `.env.local`.
+4. Add the project URL and public anon key from Supabase:
+
+   ```text
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-public-anon-key
+   ```
+
+5. Restart the Vite server.
+6. Open the admin page at:
+
+   ```text
+   http://localhost:5173/#admin
+   ```
+
+### First administrator
+
+Use the signup form to create the first account. Then open `supabase/migrations/04-promote-admin-by-email.sql`, replace only `admin@example.com` with the account email, and run it in Supabase SQL Editor. That promotes the account into `entechemmanur_admin_users` without needing the user ID, name, or any other value.
+
+After that, future people can use the signup form. Their request is automatically recorded in `entechemmanur_signup_requests`, and an existing administrator can promote them from the dashboard.
+
+### Security model
+
+- Every application table starts with `entechemmanur_`.
+- Admin access is checked against `entechemmanur_admin_users`.
+- Row Level Security policies protect admin and content tables.
+- The browser uses only the Supabase public anon key.
+- Admin passwords must be at least 6 characters, matching the configured Supabase Auth minimum.
+- Never put a Supabase `service_role` key in `.env.local` or frontend code.
+- The public site currently keeps its prototype directory data in React; the prepared content tables are ready for the next migration of public data into Supabase.

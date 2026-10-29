@@ -1,0 +1,155 @@
+import { useEffect, useState } from 'react';
+import { supabase } from './lib/supabase';
+
+const blankListing = {
+  name: '', category: '', description: '', address: '', phone: '',
+  latitude: '', longitude: '', is_published: false,
+};
+const resourceConfig = {
+  landmarks: { table: 'entechemmanur_landmarks', fields: ['name', 'description', 'latitude', 'longitude', 'is_published'] },
+  notices: { table: 'entechemmanur_notices', fields: ['title', 'body', 'severity', 'is_published'] },
+  events: { table: 'entechemmanur_events', fields: ['title', 'description', 'starts_at', 'ends_at', 'venue', 'is_published'] },
+  buses: { table: 'entechemmanur_bus_timings', fields: ['route_name', 'direction', 'departure_time', 'arrival_time', 'via', 'operating_days', 'is_published'] },
+};
+
+export default function ContentAdmin({ session, section = 'settings' }) {
+  const [settings, setSettings] = useState([]);
+  const [listings, setListings] = useState([]);
+  const [editingListingId, setEditingListingId] = useState(null);
+  const [resourceRows, setResourceRows] = useState({});
+  const [resource, setResource] = useState('landmarks');
+  const [resourceDraft, setResourceDraft] = useState({});
+  const [setting, setSetting] = useState({ key: '', value: '' });
+  const [listing, setListing] = useState(blankListing);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    const [{ data: settingRows, error: settingsError }, { data: listingRows, error: listingsError }, ...resourceResults] = await Promise.all([
+      supabase.from('entechemmanur_site_settings').select('key, value').order('key'),
+      supabase.from('entechemmanur_directory_listings').select('*').order('created_at', { ascending: false }),
+      ...Object.values(resourceConfig).map(({ table }) => supabase.from(table).select('*').order('created_at', { ascending: false })),
+    ]);
+    if (settingsError || listingsError) setError((settingsError || listingsError).message);
+    setSettings(settingRows || []);
+    setListings(listingRows || []);
+    setResourceRows(Object.fromEntries(Object.keys(resourceConfig).map((key, index) => [key, resourceResults[index].data || []])));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const saveSetting = async (event) => {
+    event.preventDefault();
+    setError('');
+    const { error: saveError } = await supabase.from('entechemmanur_site_settings').upsert({
+      key: setting.key.trim(),
+      value: setting.value,
+      updated_by: session.user.id,
+      updated_at: new Date().toISOString(),
+    });
+    if (saveError) setError(saveError.message);
+    else { setStatus(`${setting.key} saved.`); setSetting({ key: '', value: '' }); load(); }
+  };
+
+  const uploadHero = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const path = `hero/${Date.now()}-${file.name.replace(/[^a-z0-9._-]/gi, '-')}`;
+    const { error: uploadError } = await supabase.storage.from('entechemmanur_media').upload(path, file);
+    if (uploadError) { setError(uploadError.message); return; }
+    const { data } = supabase.storage.from('entechemmanur_media').getPublicUrl(path);
+    setSetting({ key: 'hero_image_url', value: data.publicUrl });
+    setStatus('Image uploaded. Save the setting to make it live.');
+  };
+
+  const addListing = async (event) => {
+    event.preventDefault();
+    setError('');
+    const request = editingListingId
+      ? supabase.from('entechemmanur_directory_listings').update({
+          ...listing,
+          latitude: listing.latitude ? Number(listing.latitude) : null,
+          longitude: listing.longitude ? Number(listing.longitude) : null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', editingListingId)
+      : supabase.from('entechemmanur_directory_listings').insert({
+      ...listing,
+      latitude: listing.latitude ? Number(listing.latitude) : null,
+      longitude: listing.longitude ? Number(listing.longitude) : null,
+      created_by: session.user.id,
+    });
+    const { error: insertError } = await request;
+    if (insertError) setError(insertError.message);
+    else { setStatus(editingListingId ? 'Directory listing updated.' : 'Directory listing added.'); setListing(blankListing); setEditingListingId(null); load(); }
+  };
+
+  const deleteListing = async (id) => {
+    const { error: deleteError } = await supabase.from('entechemmanur_directory_listings').delete().eq('id', id);
+    if (deleteError) setError(deleteError.message);
+    else load();
+  };
+
+  const addResource = async (event) => {
+    event.preventDefault();
+    const config = resourceConfig[resource];
+    const payload = { ...resourceDraft, created_by: session.user.id };
+    ['latitude', 'longitude'].forEach((field) => {
+      if (payload[field]) payload[field] = Number(payload[field]);
+    });
+    const { error: insertError } = await supabase.from(config.table).insert(payload);
+    if (insertError) setError(insertError.message);
+    else { setStatus(`${resource} entry added.`); setResourceDraft({}); load(); }
+  };
+
+  const deleteResource = async (id) => {
+    const { error: deleteError } = await supabase.from(resourceConfig[resource].table).delete().eq('id', id);
+    if (deleteError) setError(deleteError.message);
+    else load();
+  };
+
+  const fields = ['name', 'category', 'description', 'address', 'phone', 'latitude', 'longitude'];
+
+  return (
+    <>
+      {section === 'settings' && <section className="admin-panel">
+        <div className="admin-panel-head"><div><div className="kicker">Homepage content</div><h2>Hero settings</h2></div><button className="admin-refresh" type="button" onClick={load}>Refresh</button></div>
+        <p className="admin-muted">Select a setting to edit it, or upload a replacement for the first image shown on the public website.</p>
+        <div className="setting-list">
+          {settings.map((item) => <button className="setting-row" key={item.key} type="button" onClick={() => setSetting(item)}><strong>{item.key}</strong><span>{item.value}</span></button>)}
+        </div>
+        <form className="admin-form" onSubmit={saveSetting}>
+          <label className="admin-field"><span>Setting key</span><input required value={setting.key} onChange={(event) => setSetting({ ...setting, key: event.target.value })} placeholder="hero_image_url" /></label>
+          <label className="admin-field"><span>Value</span><textarea required value={setting.value} onChange={(event) => setSetting({ ...setting, value: event.target.value })} rows="4" /></label>
+          {setting.key === 'hero_image_url' && <label className="admin-upload"><span>Upload hero image</span><input type="file" accept="image/*" onChange={uploadHero} /></label>}
+          <button className="admin-submit" type="submit">Save setting</button>
+        </form>
+      </section>}
+      {section === 'town' && <section className="admin-panel">
+        <div className="admin-panel-head"><div><div className="kicker">Everything else</div><h2>Town content</h2></div><select className="admin-select" value={resource} onChange={(event) => { setResource(event.target.value); setResourceDraft({}); }}><option value="landmarks">Landmarks</option><option value="notices">Notices</option><option value="events">Events</option><option value="buses">Bus timings</option></select></div>
+        <form className="admin-form" onSubmit={addResource}>
+          {resourceConfig[resource].fields.map((field) => field === 'is_published'
+            ? <label className="admin-check" key={field}><input type="checkbox" checked={Boolean(resourceDraft[field])} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.checked })} /> Published</label>
+            : <label className="admin-field" key={field}><span>{field}</span>{field === 'body' || field === 'description' ? <textarea required={field === 'name' || field === 'title'} rows="3" value={resourceDraft[field] || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} /> : <input required={field === 'name' || field === 'title'} type={field.includes('_at') ? 'datetime-local' : 'text'} value={resourceDraft[field] || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} />}</label>
+          )}
+          <button className="admin-submit" type="submit">Add {resource}</button>
+        </form>
+        <div className="request-list admin-content-list">{(resourceRows[resource] || []).map((item) => <div className="request-row" key={item.id}><div><strong>{item.name || item.title || item.route_name}</strong><span>{item.description || item.body || item.venue || (item.direction ? `${item.direction} · ${item.departure_time}` : '')}</span></div><span className="request-status">{item.is_published ? 'published' : 'draft'}</span><button className="admin-delete" type="button" onClick={() => deleteResource(item.id)}>Delete</button></div>)}</div>
+      </section>}
+
+      {section === 'directory' && <section className="admin-panel">
+        <div className="admin-panel-head"><div><div className="kicker">Community content</div><h2>Directory listings</h2></div></div>
+        <form className="admin-form" onSubmit={addListing}>
+          {fields.map((field) => <label className="admin-field" key={field}><span>{field}</span><input required={field === 'name' || field === 'category'} value={listing[field]} onChange={(event) => setListing({ ...listing, [field]: event.target.value })} /></label>)}
+          <label className="admin-check"><input type="checkbox" checked={listing.is_published} onChange={(event) => setListing({ ...listing, is_published: event.target.checked })} /> Publish immediately</label>
+          <button className="admin-submit" type="submit">{editingListingId ? 'Save listing' : 'Add listing'}</button>
+          {editingListingId && <button className="admin-switch" type="button" onClick={() => { setListing(blankListing); setEditingListingId(null); }}>Cancel edit</button>}
+        </form>
+        <div className="request-list admin-content-list">
+          {listings.map((item) => <div className="request-row" key={item.id}><div><strong>{item.name}</strong><span>{item.category} · {item.description}</span></div><span className="request-status">{item.is_published ? 'published' : 'draft'}</span><button className="admin-refresh" type="button" onClick={() => { setListing({ ...blankListing, ...item }); setEditingListingId(item.id); }}>Edit</button><button className="admin-delete" type="button" onClick={() => deleteListing(item.id)}>Delete</button></div>)}
+        </div>
+      </section>}
+      {status && <p className="admin-success">{status}</p>}
+      {error && <p className="admin-error">{error}</p>}
+    </>
+  );
+}

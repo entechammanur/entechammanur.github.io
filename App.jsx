@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import TownMap from './components/TownMap';
+import AdminPage from './AdminPage';
+import { supabase, supabaseConfigured } from './lib/supabase';
 
 const stops = ['attupuram', 'chammanoor', 'school'];
 const stopMeta = {
@@ -17,6 +19,11 @@ const directoryData = [
   ['Health', 'Medical Shop', 'Add your trusted local listing'],
   ['Transport', 'Auto / Taxi Stand', 'Add contact and stand location'],
 ];
+const busTimingFallback = [
+  { route_name: 'Chammanoor → Guruvayur', direction: 'To Guruvayur', departure_time: '06:20', arrival_time: '07:05', via: 'Punnayurkulam · Chavakkad', operating_days: 'Daily' },
+  { route_name: 'Chammanoor → Ponnani', direction: 'To Ponnani', departure_time: '07:10', arrival_time: '08:15', via: 'Althara · Vadakkekad', operating_days: 'Daily' },
+  { route_name: 'Guruvayur → Chammanoor', direction: 'Towards Chammanoor', departure_time: '17:30', arrival_time: '18:15', via: 'Chavakkad · Punnayurkulam', operating_days: 'Mon–Sat' },
+];
 
 const reveal = {
   hidden: { opacity: 0, y: 28 },
@@ -28,21 +35,38 @@ const stagger = {
   visible: { transition: { staggerChildren: 0.09 } },
 };
 
-export default function App() {
+function PublicSite() {
   const [activeStop, setActiveStop] = useState('attupuram');
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
+  const [siteSettings, setSiteSettings] = useState({});
+  const [directoryEntries, setDirectoryEntries] = useState(directoryData);
+  const [busTimings, setBusTimings] = useState(busTimingFallback);
 
-  const categories = useMemo(() => ['All', ...new Set(directoryData.map(([group]) => group))], []);
+  useEffect(() => {
+    if (!supabaseConfigured) return undefined;
+    Promise.all([
+      supabase.from('entechemmanur_site_settings').select('key, value'),
+      supabase.from('entechemmanur_directory_listings').select('category, name, description').eq('is_published', true).order('created_at', { ascending: false }),
+      supabase.from('entechemmanur_bus_timings').select('route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
+    ]).then(([settingsResult, listingsResult, busResult]) => {
+      if (!settingsResult.error) setSiteSettings(Object.fromEntries((settingsResult.data || []).map(({ key, value }) => [key, value])));
+      if (!listingsResult.error && listingsResult.data?.length) setDirectoryEntries(listingsResult.data.map(({ category: group, name, description }) => [group, name, description || '']));
+      if (!busResult.error && busResult.data?.length) setBusTimings(busResult.data);
+    });
+    return undefined;
+  }, []);
+
+  const categories = useMemo(() => ['All', ...new Set(directoryEntries.map(([group]) => group))], [directoryEntries]);
 
   const filteredData = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return directoryData.filter(([group, title, description]) => {
+    return directoryEntries.filter(([group, title, description]) => {
       const matchesCategory = category === 'All' || group === category;
       const matchesQuery = !term || `${group} ${title} ${description}`.toLowerCase().includes(term);
       return matchesCategory && matchesQuery;
     });
-  }, [category, query]);
+  }, [category, query, directoryEntries]);
 
   const moveToNextStop = () => {
     const currentIndex = stops.indexOf(activeStop);
@@ -52,7 +76,7 @@ export default function App() {
 
   return (
     <>
-      <header className="hero" id="top">
+      <header className="hero" id="top" style={siteSettings.hero_image_url ? { backgroundImage: `linear-gradient(180deg, rgba(6, 23, 20, 0.25), rgba(6, 23, 20, 0.88) 90%), url("${siteSettings.hero_image_url}")` } : undefined}>
         <div className="container">
           <div className="nav">
             <a className="brand" href="#top">
@@ -62,6 +86,7 @@ export default function App() {
             <nav className="navlinks" aria-label="Main navigation">
               <a href="#journey">The journey</a>
               <a href="#directory">Directory</a>
+              <a href="#bus-timings">Bus timings</a>
               <a href="#stories">Stories</a>
               <a href="#contact">Contribute</a>
             </nav>
@@ -77,15 +102,10 @@ export default function App() {
             animate="visible"
             variants={stagger}
           >
-            <motion.div className="eyebrow" variants={reveal}>A living map of Kerala · 10°40′N 76°02′E</motion.div>
-            <motion.h1 variants={reveal}>
-              Find your way
-              <br />
-              back home.
-            </motion.h1>
+            <motion.div className="eyebrow" variants={reveal}>{siteSettings.hero_eyebrow || 'A living map of Kerala · 10°40′N 76°02′E'}</motion.div>
+            <motion.h1 variants={reveal}>{siteSettings.hero_title || 'Find your way back home.'}</motion.h1>
             <motion.p className="hero-copy" variants={reveal}>
-              A new way to experience chammanur — its green roads, familiar landmarks and the people who
-              make this place feel like home.
+              {siteSettings.hero_description || 'A new way to experience Chammanoor — its green roads, familiar landmarks and the people who make this place feel like home.'}
             </motion.p>
             <motion.a className="primary" href="#journey" variants={reveal} whileHover={{ y: -4, scale: 1.03 }} whileTap={{ scale: 0.97 }}>
               Start the journey
@@ -228,6 +248,24 @@ export default function App() {
           </div>
         </motion.section>
 
+        <motion.section className="buses" id="bus-timings" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.16 }} variants={stagger}>
+          <div className="container">
+            <motion.div className="directory-header" variants={reveal}>
+              <div><div className="kicker">03 / Travel locally</div><h2 className="title">Bus <em>timings.</em></h2></div>
+              <p>Useful departure times for journeys through Chammanoor. Confirm timings locally before travelling.</p>
+            </motion.div>
+            <motion.div className="bus-grid" variants={stagger}>
+              {busTimings.map((bus) => (
+                <motion.article className="bus-card" key={`${bus.route_name}-${bus.departure_time}`} variants={reveal} whileHover={{ y: -5 }}>
+                  <div className="bus-time">{bus.departure_time?.slice(0, 5)}</div>
+                  <div><h3>{bus.route_name}</h3><p>{bus.direction} · {bus.operating_days}</p><small>{bus.via || 'Local route'}{bus.arrival_time ? ` · Arrives ${bus.arrival_time.slice(0, 5)}` : ''}</small></div>
+                </motion.article>
+              ))}
+            </motion.div>
+            <p className="bus-note">Times are community-maintained and may change. Please verify at the stop or with the operator.</p>
+          </div>
+        </motion.section>
+
         <motion.section id="stories" className="stories" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }} transition={{ duration: 0.9 }}>
           <div className="container">
             <div className="kicker">03 / A place with stories</div>
@@ -251,4 +289,16 @@ export default function App() {
       </footer>
     </>
   );
+}
+
+export default function App() {
+  const [isAdminRoute, setIsAdminRoute] = useState(window.location.hash === '#admin');
+
+  useEffect(() => {
+    const handleHashChange = () => setIsAdminRoute(window.location.hash === '#admin');
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  return isAdminRoute ? <AdminPage /> : <PublicSite />;
 }
