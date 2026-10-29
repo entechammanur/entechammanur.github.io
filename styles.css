@@ -54,8 +54,7 @@ button {
 .hero {
   min-height: 790px;
   background: linear-gradient(180deg, rgba(6, 23, 20, 0.25), rgba(6, 23, 20, 0.88) 90%),
-    url('https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=2200&q=85')
-      center/cover;
+    url('/images/entechammanurhome.png') center/cover;
   position: relative;
   color: var(--ink);
   overflow: hidden;

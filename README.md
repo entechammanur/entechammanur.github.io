@@ -25,10 +25,10 @@ This stack is a strong fit for a rich interactive landing page because it gives 
    npm install
    ```
 
-2. Start the development server:
+2. Start the development server on this computer:
 
    ```bash
-   npm run dev -- --host
+   npm run dev
    ```
 
 3. Open the local URL shown in the terminal, usually:
@@ -36,6 +36,16 @@ This stack is a strong fit for a rich interactive landing page because it gives 
    ```bash
    http://localhost:5173
    ```
+
+   Vite uses port 5173 when available and automatically tries another port if it is occupied.
+
+To test on another device on the same network, run:
+
+```bash
+npm run dev:host
+```
+
+Open the `Network` URL printed by Vite on that device. If it cannot connect, allow Node.js through Windows Firewall on your private network.
 
 ## Production build
 
@@ -74,6 +84,8 @@ Framer Motion provides the page entrance reveals, scroll-triggered section trans
 Vite uses separate production chunks for React, motion, Leaflet, Supabase, and the admin/map routes so the initial page does not load every feature at once.
 
 The admin dashboard can now create, edit, publish, and delete homepage settings, directory listings, landmarks, notices, events, and bus timings. Landmark entries support a custom map label/place number, route ordering, and a `Highlight on the map` toggle; published landmarks become the public map stops. For a landmark location, paste a Google Maps URL, latitude/longitude pair, or full Plus Code; the dashboard detects the format, extracts normalized coordinates, and keeps the original input for traceability. It can also reject signup requests. Upload a new hero image to Supabase Storage from Homepage settings. Public pages load published Supabase listings, landmarks, and homepage settings automatically, with the current prototype content used as a fallback.
+
+The default hero image is `public/images/fall-landscape.svg`. Replace that file to change the local image, or update the hero image path in `styles.css`; a published `hero_image_url` in the admin settings still takes precedence.
 
 Bus timings are managed from Admin → Town content → Bus timings. Published schedules appear in the public Bus timings section.
 
