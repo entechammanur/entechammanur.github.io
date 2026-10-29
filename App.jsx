@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import TownMap from './components/TownMap';
-import AdminPage from './AdminPage';
 import { supabase, supabaseConfigured } from './lib/supabase';
+
+const TownMap = lazy(() => import('./components/TownMap'));
+const AdminPage = lazy(() => import('./AdminPage'));
 
 const stops = ['attupuram', 'chammanoor', 'school'];
 const stopMeta = {
@@ -140,7 +141,9 @@ function PublicSite() {
                 </div>
               </div>
 
-              <TownMap activeStop={activeStop} onSelectStop={setActiveStop} />
+              <Suspense fallback={<div className="map-loading">Loading live map…</div>}>
+                <TownMap activeStop={activeStop} onSelectStop={setActiveStop} />
+              </Suspense>
 
               <div className="map-footer">
                 <p>
@@ -300,5 +303,9 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  return isAdminRoute ? <AdminPage /> : <PublicSite />;
+  return (
+    <Suspense fallback={<main className="admin-shell"><div className="admin-auth-card"><p className="admin-muted">Loading Chammanoor…</p></div></main>}>
+      {isAdminRoute ? <AdminPage /> : <PublicSite />}
+    </Suspense>
+  );
 }

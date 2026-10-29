@@ -233,6 +233,17 @@ h1 {
   background: #dce5d8;
 }
 
+.map-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  background: #dce5d8;
+  color: #173b31;
+  font: 500 0.75rem var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .leaflet-town-map .leaflet-tile {
   filter: saturate(0.78) sepia(0.08);
 }
