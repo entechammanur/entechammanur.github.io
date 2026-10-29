@@ -44,9 +44,9 @@ const directoryData = [
   ['Transport', 'Auto / Taxi Stand', 'Add contact and stand location'],
 ];
 const busTimingFallback = [
-  { route_name: 'Chammanoor → Guruvayur', direction: 'To Guruvayur', departure_time: '06:20', arrival_time: '07:05', via: 'Punnayurkulam · Chavakkad', operating_days: 'Daily' },
-  { route_name: 'Chammanoor → Ponnani', direction: 'To Ponnani', departure_time: '07:10', arrival_time: '08:15', via: 'Althara · Vadakkekad', operating_days: 'Daily' },
-  { route_name: 'Guruvayur → Chammanoor', direction: 'Towards Chammanoor', departure_time: '17:30', arrival_time: '18:15', via: 'Chavakkad · Punnayurkulam', operating_days: 'Mon–Sat' },
+  { bus_name: '', route_name: 'Chammanoor → Guruvayur', direction: 'To Guruvayur', departure_time: '06:20', arrival_time: '07:05', via: 'Punnayurkulam · Chavakkad', operating_days: 'Daily' },
+  { bus_name: '', route_name: 'Chammanoor → Ponnani', direction: 'To Ponnani', departure_time: '07:10', arrival_time: '08:15', via: 'Althara · Vadakkekad', operating_days: 'Daily' },
+  { bus_name: '', route_name: 'Guruvayur → Chammanoor', direction: 'Towards Chammanoor', departure_time: '17:30', arrival_time: '18:15', via: 'Chavakkad · Punnayurkulam', operating_days: 'Mon–Sat' },
 ];
 
 const reveal = {
@@ -94,7 +94,7 @@ function PublicSite() {
         const results = await Promise.all([
           supabase.from('entechemmanur_site_settings').select('key, value'),
           supabase.from('entechemmanur_directory_listings').select('category, name, description').eq('is_published', true).order('created_at', { ascending: false }),
-          supabase.from('entechemmanur_bus_timings').select('route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
+          supabase.from('entechemmanur_bus_timings').select('bus_name, route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
           supabase.from('entechemmanur_landmarks').select('id, name, description, stop_label, latitude, longitude, route_order, is_map_highlighted').eq('is_published', true).order('route_order').order('created_at'),
         ]);
         if (!isActive) return;
@@ -342,7 +342,13 @@ function PublicSite() {
               {isContentLoading ? <SkeletonCards count={3} /> : busTimings.map((bus) => (
                 <motion.article className="bus-card" key={`${bus.route_name}-${bus.departure_time}`} variants={reveal} whileHover={{ y: -5 }}>
                   <div className="bus-time">{bus.departure_time?.slice(0, 5)}</div>
-                  <div><h3>{bus.route_name}</h3><p>{bus.direction} · {bus.operating_days}</p><small>{bus.via || 'Local route'}{bus.arrival_time ? ` · Arrives ${bus.arrival_time.slice(0, 5)}` : ''}</small></div>
+                  <div className="bus-details">
+                    <span className="bus-name-label">Bus name</span>
+                    <strong className="bus-name">{bus.bus_name?.trim() || 'Not provided'}</strong>
+                    <h3>{bus.route_name}</h3>
+                    <p>{bus.direction} · {bus.operating_days}</p>
+                    <small>{bus.via || 'Local route'}{bus.arrival_time ? ` · Arrives ${bus.arrival_time.slice(0, 5)}` : ''}</small>
+                  </div>
                 </motion.article>
               ))}
             </motion.div>

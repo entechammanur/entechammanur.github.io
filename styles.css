@@ -946,6 +946,23 @@ h1 {
   font: 600 1.65rem var(--serif);
 }
 
+.bus-name-label {
+  display: block;
+  margin-bottom: 3px;
+  color: #8a968c;
+  font: 500 0.58rem var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.bus-name {
+  display: block;
+  margin-bottom: 8px;
+  color: #173b31;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
 .bus-card h3 {
   color: #173b31;
   font: 600 1.1rem var(--serif);

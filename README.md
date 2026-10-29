@@ -114,7 +114,7 @@ The admin dashboard can now create, edit, publish, and delete homepage settings,
 
 The default hero image is `public/images/fall-landscape.svg`. Replace that file to change the local image, or update the hero image path in `styles.css`; a published `hero_image_url` in the admin settings still takes precedence.
 
-Bus timings are managed from Admin → Town content → Bus timings. Published schedules appear in the public Bus timings section.
+Bus timings are managed from Admin → Town content → Bus timings. Add a bus name alongside the route and schedule details; published bus names appear in each public Bus timings card. Run `08-add-bus-name.sql` for existing Supabase projects.
 
 ## Supabase setup
 
@@ -128,6 +128,7 @@ Bus timings are managed from Admin → Town content → Bus timings. Published s
    supabase/migrations/05-create-site-settings-and-storage.sql
    supabase/migrations/06-create-bus-timings.sql
    supabase/migrations/07-add-map-stop-controls.sql
+   supabase/migrations/08-add-bus-name.sql
    ```
 
    Run `04-promote-admin-by-email.sql` separately only when promoting a real account, after replacing its email.
