@@ -147,6 +147,16 @@ function AdminDashboard({ session }) {
     }
   };
 
+  const reject = async (request) => {
+    setError('');
+    const { error: updateError } = await supabase
+      .from('entechemmanur_signup_requests')
+      .update({ status: 'rejected', reviewed_by: session.user.id, reviewed_at: new Date().toISOString() })
+      .eq('id', request.id);
+    if (updateError) setError(updateError.message);
+    else { setStatus(`${request.email} was marked as rejected.`); loadRequests(); }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     window.location.hash = '#admin';
@@ -201,7 +211,7 @@ function AdminDashboard({ session }) {
                 <div className="request-row" key={request.id}>
                   <div><strong>{request.name}</strong><span>{request.email}</span></div>
                   <span className={`request-status ${request.status}`}>{request.status}</span>
-                  {request.status === 'pending' && <button type="button" className="admin-approve" onClick={() => approve(request)}>Promote to admin</button>}
+                  {request.status === 'pending' && <span className="request-actions"><button type="button" className="admin-approve" onClick={() => approve(request)}>Promote to admin</button><button type="button" className="admin-delete" onClick={() => reject(request)}>Reject</button></span>}
                 </div>
               ))}
             </div>

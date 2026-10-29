@@ -1066,6 +1066,23 @@ footer strong {
   margin: 22px 0;
 }
 
+.setting-row-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.setting-row-wrap .setting-row {
+  width: 100%;
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .setting-row {
   display: grid;
   gap: 5px;
@@ -1117,6 +1134,62 @@ footer strong {
   gap: 7px;
 }
 
+.hero-upload-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin: 22px 0;
+  padding: 18px;
+  border: 1px dashed rgba(232, 239, 226, 0.26);
+  background: #071b18;
+}
+
+.hero-upload-card strong,
+.hero-upload-card span {
+  display: block;
+}
+
+.hero-upload-card strong {
+  color: #e7a35a;
+}
+
+.hero-upload-card span {
+  color: #aab8ae;
+  font-size: 0.72rem;
+  margin-top: 5px;
+}
+
+.hero-upload-card img {
+  width: 110px;
+  height: 68px;
+  object-fit: cover;
+  border: 1px solid rgba(232, 239, 226, 0.2);
+}
+
+.admin-upload-button {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e7a35a;
+  color: #e7a35a;
+  padding: 10px 13px;
+  cursor: pointer;
+  font: 500 0.68rem var(--mono);
+  text-align: center;
+}
+
+.admin-upload-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.admin-upload-button:has(input:disabled) {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .admin-delete {
   border: 1px solid rgba(224, 103, 87, 0.45);
   background: transparent;
@@ -1132,6 +1205,15 @@ footer strong {
 @media (max-width: 720px) {
   .admin-auth-card {
     padding: 28px 22px;
+  }
+
+  .hero-upload-card {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-upload-card img {
+    width: 100%;
+    height: 150px;
   }
 
   .admin-brand {

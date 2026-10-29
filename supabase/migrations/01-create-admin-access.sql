@@ -70,3 +70,7 @@ create policy "Applicants can read their request"
 create policy "Admins can update requests"
   on public.entechemmanur_signup_requests for update
   to authenticated using (public.entechemmanur_is_admin()) with check (public.entechemmanur_is_admin());
+
+create policy "Admins can delete requests"
+  on public.entechemmanur_signup_requests for delete
+  to authenticated using (public.entechemmanur_is_admin());

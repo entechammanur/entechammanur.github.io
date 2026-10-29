@@ -73,7 +73,7 @@ Framer Motion provides the page entrance reveals, scroll-triggered section trans
 
 Vite uses separate production chunks for React, motion, Leaflet, Supabase, and the admin/map routes so the initial page does not load every feature at once.
 
-The admin dashboard can now edit homepage settings, upload a new hero image to Supabase Storage, and add or delete published directory listings. Public pages load published Supabase listings and homepage settings automatically, with the current prototype content used as a fallback.
+The admin dashboard can now create, edit, publish, and delete homepage settings, directory listings, landmarks, notices, events, and bus timings. It can also reject signup requests. Upload a new hero image to Supabase Storage from Homepage settings. Public pages load published Supabase listings and homepage settings automatically, with the current prototype content used as a fallback.
 
 Bus timings are managed from Admin → Town content → Bus timings. Published schedules appear in the public Bus timings section.
 

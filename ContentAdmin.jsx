@@ -19,8 +19,11 @@ export default function ContentAdmin({ session, section = 'settings' }) {
   const [resourceRows, setResourceRows] = useState({});
   const [resource, setResource] = useState(section === 'buses' ? 'buses' : 'landmarks');
   const [resourceDraft, setResourceDraft] = useState({});
+  const [editingResourceId, setEditingResourceId] = useState(null);
   const [setting, setSetting] = useState({ key: '', value: '' });
   const [listing, setListing] = useState(blankListing);
+  const [heroPreview, setHeroPreview] = useState('');
+  const [uploadingHero, setUploadingHero] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
@@ -56,15 +59,44 @@ export default function ContentAdmin({ session, section = 'settings' }) {
     else { setStatus(`${setting.key} saved.`); setSetting({ key: '', value: '' }); load(); }
   };
 
+  const deleteSetting = async (key) => {
+    const { error: deleteError } = await supabase.from('entechemmanur_site_settings').delete().eq('key', key);
+    if (deleteError) setError(deleteError.message);
+    else { setStatus(`${key} deleted.`); setSetting({ key: '', value: '' }); load(); }
+  };
+
   const uploadHero = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image file.');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setError('Hero images must be smaller than 8 MB.');
+      return;
+    }
+    setError('');
+    setStatus('');
+    setHeroPreview(URL.createObjectURL(file));
+    setUploadingHero(true);
     const path = `hero/${Date.now()}-${file.name.replace(/[^a-z0-9._-]/gi, '-')}`;
     const { error: uploadError } = await supabase.storage.from('entechemmanur_media').upload(path, file);
-    if (uploadError) { setError(uploadError.message); return; }
+    if (uploadError) { setError(uploadError.message); setUploadingHero(false); return; }
     const { data } = supabase.storage.from('entechemmanur_media').getPublicUrl(path);
-    setSetting({ key: 'hero_image_url', value: data.publicUrl });
-    setStatus('Image uploaded. Save the setting to make it live.');
+    const { error: saveError } = await supabase.from('entechemmanur_site_settings').upsert({
+      key: 'hero_image_url',
+      value: data.publicUrl,
+      updated_by: session.user.id,
+      updated_at: new Date().toISOString(),
+    });
+    setUploadingHero(false);
+    if (saveError) setError(saveError.message);
+    else {
+      setSetting({ key: 'hero_image_url', value: data.publicUrl });
+      setStatus('Hero image uploaded from your device and published.');
+      load();
+    }
   };
 
   const addListing = async (event) => {
@@ -101,9 +133,12 @@ export default function ContentAdmin({ session, section = 'settings' }) {
     ['latitude', 'longitude'].forEach((field) => {
       if (payload[field]) payload[field] = Number(payload[field]);
     });
-    const { error: insertError } = await supabase.from(config.table).insert(payload);
+    const request = editingResourceId
+      ? supabase.from(config.table).update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingResourceId)
+      : supabase.from(config.table).insert(payload);
+    const { error: insertError } = await request;
     if (insertError) setError(insertError.message);
-    else { setStatus(`${resource} entry added.`); setResourceDraft({}); load(); }
+    else { setStatus(`${resource} entry ${editingResourceId ? 'updated' : 'added'}.`); setResourceDraft({}); setEditingResourceId(null); load(); }
   };
 
   const deleteResource = async (id) => {
@@ -112,21 +147,39 @@ export default function ContentAdmin({ session, section = 'settings' }) {
     else load();
   };
 
+  const editResource = (item) => {
+    const draft = { ...item };
+    ['created_at', 'updated_at', 'created_by', 'id'].forEach((key) => delete draft[key]);
+    setResourceDraft(draft);
+    setEditingResourceId(item.id);
+  };
+
   const fields = ['name', 'category', 'description', 'address', 'phone', 'latitude', 'longitude'];
 
   return (
     <>
       {section === 'settings' && <section className="admin-panel">
         <div className="admin-panel-head"><div><div className="kicker">Homepage content</div><h2>Hero settings</h2></div><button className="admin-refresh" type="button" onClick={load}>Refresh</button></div>
-        <p className="admin-muted">Select a setting to edit it, or upload a replacement for the first image shown on the public website.</p>
+        <p className="admin-muted">Edit homepage text or upload a replacement hero image directly from your device.</p>
+        <div className="hero-upload-card">
+          <div>
+            <strong>Hero image</strong>
+            <span>JPG, PNG, WebP · maximum 8 MB</span>
+          </div>
+          {heroPreview && <img src={heroPreview} alt="Selected hero preview" />}
+          <label className="admin-upload-button">
+            {uploadingHero ? 'Uploading…' : 'Choose image from device'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadHero} disabled={uploadingHero} />
+          </label>
+        </div>
         <div className="setting-list">
-          {settings.map((item) => <button className="setting-row" key={item.key} type="button" onClick={() => setSetting(item)}><strong>{item.key}</strong><span>{item.value}</span></button>)}
+          {settings.map((item) => <div className="setting-row-wrap" key={item.key}><button className="setting-row" type="button" onClick={() => setSetting(item)}><strong>{item.key}</strong><span>{item.value}</span></button><button className="admin-delete" type="button" onClick={() => deleteSetting(item.key)}>Delete</button></div>)}
         </div>
         <form className="admin-form" onSubmit={saveSetting}>
           <label className="admin-field"><span>Setting key</span><input required value={setting.key} onChange={(event) => setSetting({ ...setting, key: event.target.value })} placeholder="hero_image_url" /></label>
           <label className="admin-field"><span>Value</span><textarea required value={setting.value} onChange={(event) => setSetting({ ...setting, value: event.target.value })} rows="4" /></label>
-          {setting.key === 'hero_image_url' && <label className="admin-upload"><span>Upload hero image</span><input type="file" accept="image/*" onChange={uploadHero} /></label>}
           <button className="admin-submit" type="submit">Save setting</button>
+          {setting.key && <button className="admin-switch" type="button" onClick={() => setSetting({ key: '', value: '' })}>Clear editor</button>}
         </form>
       </section>}
       {(section === 'town' || section === 'buses') && <section className="admin-panel">
@@ -136,9 +189,10 @@ export default function ContentAdmin({ session, section = 'settings' }) {
             ? <label className="admin-check" key={field}><input type="checkbox" checked={Boolean(resourceDraft[field])} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.checked })} /> Published</label>
             : <label className="admin-field" key={field}><span>{field}</span>{field === 'body' || field === 'description' ? <textarea required={field === 'name' || field === 'title'} rows="3" value={resourceDraft[field] || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} /> : <input required={field === 'name' || field === 'title'} type={field.includes('_at') ? 'datetime-local' : 'text'} value={resourceDraft[field] || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} />}</label>
           )}
-          <button className="admin-submit" type="submit">Add {resource}</button>
+          <button className="admin-submit" type="submit">{editingResourceId ? `Save ${resource}` : `Add ${resource}`}</button>
+          {editingResourceId && <button className="admin-switch" type="button" onClick={() => { setResourceDraft({}); setEditingResourceId(null); }}>Cancel edit</button>}
         </form>
-        <div className="request-list admin-content-list">{(resourceRows[resource] || []).map((item) => <div className="request-row" key={item.id}><div><strong>{item.name || item.title || item.route_name}</strong><span>{item.description || item.body || item.venue || (item.direction ? `${item.direction} · ${item.departure_time}` : '')}</span></div><span className="request-status">{item.is_published ? 'published' : 'draft'}</span><button className="admin-delete" type="button" onClick={() => deleteResource(item.id)}>Delete</button></div>)}</div>
+        <div className="request-list admin-content-list">{(resourceRows[resource] || []).map((item) => <div className="request-row" key={item.id}><div><strong>{item.name || item.title || item.route_name}</strong><span>{item.description || item.body || item.venue || (item.direction ? `${item.direction} · ${item.departure_time}` : '')}</span></div><span className="request-status">{item.is_published ? 'published' : 'draft'}</span><button className="admin-refresh" type="button" onClick={() => editResource(item)}>Edit</button><button className="admin-delete" type="button" onClick={() => deleteResource(item.id)}>Delete</button></div>)}</div>
       </section>}
 
       {section === 'directory' && <section className="admin-panel">
