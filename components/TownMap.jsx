@@ -2,19 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
 
 const townCenter = [10.67449, 76.01306];
-const route = [
-  [10.670849, 76.002072],
-  [10.675411, 76.020533],
-  [10.677212, 76.024398],
-];
-
-const locations = {
-  attupuram: { coordinates: [10.670849, 76.002072], label: 'Attupuram Centre', note: 'Verified coordinate supplied by you' },
-  chammanoor: { coordinates: [10.675411, 76.020533], label: 'Chammanoor Centre', note: 'Verified coordinate supplied by you' },
-  school: { coordinates: [10.677212, 76.024398], label: 'Amal English School', note: 'Verified coordinate supplied by you' },
-};
-
-function MapFocus({ activeStop }) {
+function MapFocus({ activeStop, locations }) {
   const map = useMap();
   const firstRender = useRef(true);
 
@@ -27,7 +15,7 @@ function MapFocus({ activeStop }) {
     if (location) {
       map.flyTo(location.coordinates, 16, { duration: 1.1 });
     }
-  }, [activeStop, map]);
+  }, [activeStop, locations, map]);
 
   return null;
 }
@@ -45,8 +33,19 @@ function MapActions({ satellite, onToggleSatellite }) {
   );
 }
 
-export default function TownMap({ activeStop, onSelectStop }) {
+export default function TownMap({ activeStop, onSelectStop, locations = {} }) {
   const [satellite, setSatellite] = useState(false);
+  const safeLocations = Object.fromEntries(
+    Object.entries(locations).filter(([, location]) => (
+      Array.isArray(location.coordinates)
+      && location.coordinates.length === 2
+      && location.coordinates.every((value) => Number.isFinite(Number(value)))
+      && Math.abs(Number(location.coordinates[0])) <= 90
+      && Math.abs(Number(location.coordinates[1])) <= 180
+    )),
+  );
+  const route = Object.values(safeLocations).map(({ coordinates }) => coordinates);
+  const mapCoordinates = route.length > 0 ? route[0] : townCenter;
   const tiles = useMemo(() => satellite
     ? {
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -59,16 +58,16 @@ export default function TownMap({ activeStop, onSelectStop }) {
 
   return (
     <MapContainer
-      center={townCenter}
-      zoom={14}
+      center={mapCoordinates}
+      zoom={route.length === 1 ? 16 : 14}
       scrollWheelZoom
       className={`leaflet-town-map ${satellite ? 'is-satellite' : ''}`}
-      bounds={Object.values(locations).map(({ coordinates }) => coordinates)}
+      bounds={route.length > 1 ? route : undefined}
       boundsOptions={{ padding: [45, 45] }}
     >
       <TileLayer attribution={tiles.attribution} url={tiles.url} />
-      <Polyline positions={route} pathOptions={{ color: '#d8873f', weight: 5, opacity: 0.9, dashArray: '10 10' }} />
-      {Object.entries(locations).map(([key, location], index) => (
+      {route.length > 1 && <Polyline positions={route} pathOptions={{ color: '#d8873f', weight: 5, opacity: 0.9, dashArray: '10 10' }} />}
+      {Object.entries(safeLocations).map(([key, location], index) => (
         <CircleMarker
           key={key}
           center={location.coordinates}
@@ -76,20 +75,20 @@ export default function TownMap({ activeStop, onSelectStop }) {
           pathOptions={{
             color: '#fff',
             weight: 3,
-            fillColor: activeStop === key ? '#e7a35a' : '#173b31',
+            fillColor: activeStop === key || location.isHighlighted ? '#e7a35a' : '#173b31',
             fillOpacity: 1,
           }}
           eventHandlers={{ click: () => onSelectStop(key) }}
         >
           <Tooltip direction="top" offset={[0, -10]} permanent={activeStop === key}>
-            <strong>{String(index + 1).padStart(2, '0')} · {location.label}</strong>
+            <strong>{location.stopLabel || `STOP ${String(index + 1).padStart(2, '0')}`} · {location.label}</strong>
             <br />
             {location.note}
           </Tooltip>
         </CircleMarker>
       ))}
       <MapActions satellite={satellite} onToggleSatellite={() => setSatellite((value) => !value)} />
-      <MapFocus activeStop={activeStop} />
+      <MapFocus activeStop={activeStop} locations={safeLocations} />
     </MapContainer>
   );
 }

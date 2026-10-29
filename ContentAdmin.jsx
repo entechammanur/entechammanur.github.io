@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
+import { parseLocationInput } from './lib/location';
 
 const blankListing = {
   name: '', category: '', description: '', address: '', phone: '',
   latitude: '', longitude: '', is_published: false,
 };
 const resourceConfig = {
-  landmarks: { table: 'entechemmanur_landmarks', fields: ['name', 'description', 'latitude', 'longitude', 'is_published'] },
+  landmarks: { table: 'entechemmanur_landmarks', fields: ['name', 'description', 'stop_label', 'location_input', 'route_order', 'is_map_highlighted', 'is_published'] },
   notices: { table: 'entechemmanur_notices', fields: ['title', 'body', 'severity', 'is_published'] },
   events: { table: 'entechemmanur_events', fields: ['title', 'description', 'starts_at', 'ends_at', 'venue', 'is_published'] },
   buses: { table: 'entechemmanur_bus_timings', fields: ['route_name', 'direction', 'departure_time', 'arrival_time', 'via', 'operating_days', 'is_published'] },
@@ -38,7 +39,8 @@ export default function ContentAdmin({ session, section = 'settings' }) {
       supabase.from('entechemmanur_directory_listings').select('*').order('created_at', { ascending: false }),
       ...Object.values(resourceConfig).map(({ table }) => supabase.from(table).select('*').order('created_at', { ascending: false })),
     ]);
-    if (settingsError || listingsError) setError((settingsError || listingsError).message);
+    const resourceError = resourceResults.find((result) => result.error)?.error;
+    if (settingsError || listingsError || resourceError) setError((settingsError || listingsError || resourceError).message);
     setSettings(settingRows || []);
     setListings(listingRows || []);
     setResourceRows(Object.fromEntries(Object.keys(resourceConfig).map((key, index) => [key, resourceResults[index].data || []])));
@@ -130,7 +132,17 @@ export default function ContentAdmin({ session, section = 'settings' }) {
     event.preventDefault();
     const config = resourceConfig[resource];
     const payload = { ...resourceDraft, created_by: session.user.id };
-    ['latitude', 'longitude'].forEach((field) => {
+    if (resource === 'landmarks') {
+      const parsed = parseLocationInput(payload.location_input || '');
+      if (!parsed.coordinates) {
+        setError('Paste a Google Maps link containing coordinates, a latitude/longitude pair, or a full Plus Code.');
+        return;
+      }
+      payload.latitude = parsed.coordinates.latitude;
+      payload.longitude = parsed.coordinates.longitude;
+      payload.location_type = parsed.type;
+    }
+    ['latitude', 'longitude', 'route_order'].forEach((field) => {
       if (payload[field]) payload[field] = Number(payload[field]);
     });
     const request = editingResourceId
@@ -150,11 +162,15 @@ export default function ContentAdmin({ session, section = 'settings' }) {
   const editResource = (item) => {
     const draft = { ...item };
     ['created_at', 'updated_at', 'created_by', 'id'].forEach((key) => delete draft[key]);
+    if (resource === 'landmarks' && !draft.location_input && draft.latitude != null && draft.longitude != null) {
+      draft.location_input = `${draft.latitude}, ${draft.longitude}`;
+    }
     setResourceDraft(draft);
     setEditingResourceId(item.id);
   };
 
   const fields = ['name', 'category', 'description', 'address', 'phone', 'latitude', 'longitude'];
+  const parsedLocation = resource === 'landmarks' ? parseLocationInput(resourceDraft.location_input || '') : null;
 
   return (
     <>
@@ -184,10 +200,11 @@ export default function ContentAdmin({ session, section = 'settings' }) {
       </section>}
       {(section === 'town' || section === 'buses') && <section className="admin-panel">
         <div className="admin-panel-head"><div><div className="kicker">{section === 'buses' ? 'Transport information' : 'Everything else'}</div><h2>{section === 'buses' ? 'Bus timings' : 'Town content'}</h2></div>{section === 'town' && <select className="admin-select" value={resource} onChange={(event) => { setResource(event.target.value); setResourceDraft({}); }}><option value="landmarks">Landmarks</option><option value="notices">Notices</option><option value="events">Events</option><option value="buses">Bus timings</option></select>}</div>
+        {resource === 'landmarks' && <p className="admin-muted">{parsedLocation?.coordinates ? `Detected ${parsedLocation.type.replace('_', ' ')} · ${parsedLocation.coordinates.latitude.toFixed(6)}, ${parsedLocation.coordinates.longitude.toFixed(6)}` : 'Paste a Google Maps link, latitude/longitude pair, or full Plus Code. The coordinates will be extracted and normalized automatically.'}</p>}
         <form className="admin-form" onSubmit={addResource}>
-          {resourceConfig[resource].fields.map((field) => field === 'is_published'
-            ? <label className="admin-check" key={field}><input type="checkbox" checked={Boolean(resourceDraft[field])} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.checked })} /> Published</label>
-            : <label className="admin-field" key={field}><span>{field}</span>{field === 'body' || field === 'description' ? <textarea required={field === 'name' || field === 'title'} rows="3" value={resourceDraft[field] || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} /> : <input required={field === 'name' || field === 'title'} type={field.includes('_at') ? 'datetime-local' : 'text'} value={resourceDraft[field] || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} />}</label>
+          {resourceConfig[resource].fields.map((field) => field === 'is_published' || field === 'is_map_highlighted'
+            ? <label className="admin-check" key={field}><input type="checkbox" checked={Boolean(resourceDraft[field])} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.checked })} /> {field === 'is_map_highlighted' ? 'Highlight on the map' : 'Published'}</label>
+            : <label className="admin-field" key={field}><span>{field === 'location_input' ? 'Location' : field === 'stop_label' ? 'Map label' : field}</span>{field === 'body' || field === 'description' ? <textarea required={field === 'name' || field === 'title'} rows="3" value={resourceDraft[field] ?? ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} /> : <input required={field === 'name' || field === 'title' || (resource === 'landmarks' && field === 'location_input')} placeholder={field === 'location_input' ? 'Paste Google Maps link, coordinates, or Plus Code' : field === 'stop_label' ? 'Example: MAIN JUNCTION or STOP 04' : undefined} type={field.includes('_at') ? 'datetime-local' : ['latitude', 'longitude', 'route_order'].includes(field) ? 'number' : 'text'} step={field === 'route_order' ? '1' : 'any'} value={resourceDraft[field] ?? ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} />}</label>
           )}
           <button className="admin-submit" type="submit">{editingResourceId ? `Save ${resource}` : `Add ${resource}`}</button>
           {editingResourceId && <button className="admin-switch" type="button" onClick={() => { setResourceDraft({}); setEditingResourceId(null); }}>Cancel edit</button>}

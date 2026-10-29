@@ -487,6 +487,8 @@ h1 {
   margin: 0;
   color: var(--muted);
   font-size: 0.77rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .map-footer strong {
@@ -516,6 +518,14 @@ h1 {
   align-items: center;
   transition: opacity 0.2s ease;
   cursor: pointer;
+  min-width: 0;
+}
+
+.waypoint > div,
+.waypoint h3,
+.waypoint p {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .waypoint-number {
@@ -1009,6 +1019,7 @@ footer strong {
 
 .admin-panel {
   padding: 28px;
+  min-width: 0;
 }
 
 .admin-panel-head {
@@ -1034,6 +1045,12 @@ footer strong {
   align-items: center;
   border-top: 1px solid rgba(232, 239, 226, 0.12);
   padding: 17px 0;
+  min-width: 0;
+}
+
+.request-row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .request-row strong,
@@ -1114,6 +1131,7 @@ footer strong {
   padding: 13px;
   outline: none;
   font: 0.85rem var(--sans);
+  max-width: 100%;
 }
 
 .admin-upload,
@@ -1207,6 +1225,30 @@ footer strong {
     padding: 28px 22px;
   }
 
+  .admin-shell {
+    padding: 28px 12px;
+  }
+
+  .admin-panel {
+    padding: 20px 16px;
+  }
+
+  .admin-panel-head,
+  .admin-topbar {
+    align-items: flex-start;
+    gap: 16px;
+    flex-direction: column;
+  }
+
+  .admin-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .admin-nav button {
+    flex: 0 0 auto;
+  }
+
   .hero-upload-card {
     grid-template-columns: 1fr;
   }
@@ -1229,7 +1271,12 @@ footer strong {
   }
 
   .request-row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .request-row .request-actions {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
   }
 
   .admin-approve {

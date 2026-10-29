@@ -5,12 +5,34 @@ import { supabase, supabaseConfigured } from './lib/supabase';
 const TownMap = lazy(() => import('./components/TownMap'));
 const AdminPage = lazy(() => import('./AdminPage'));
 
-const stops = ['attupuram', 'chammanoor', 'school'];
-const stopMeta = {
-  attupuram: { label: 'Attupuram Centre', tagline: '10.670849, 76.002072 · A verified point on your local route.' },
-  chammanoor: { label: 'Chammanoor Centre', tagline: '10.675411, 76.020533 · The heart of the town experience.' },
-  school: { label: 'Amal English School', tagline: '10.677212, 76.024398 · A verified landmark supplied by you.' },
-};
+const fallbackStops = [
+  { id: 'attupuram', name: 'Attupuram Centre', stop_label: 'STOP 01', description: 'A verified point on your local route.', latitude: 10.670849, longitude: 76.002072, route_order: 1, is_map_highlighted: true },
+  { id: 'chammanoor', name: 'Chammanoor Centre', stop_label: 'STOP 02', description: 'The heart of the town experience.', latitude: 10.675411, longitude: 76.020533, route_order: 2, is_map_highlighted: true },
+  { id: 'school', name: 'Amal English School', stop_label: 'STOP 03', description: 'A verified landmark supplied by you.', latitude: 10.677212, longitude: 76.024398, route_order: 3, is_map_highlighted: true },
+];
+
+function isValidCoordinatePair(latitude, longitude) {
+  return Number.isFinite(Number(latitude))
+    && Number.isFinite(Number(longitude))
+    && Math.abs(Number(latitude)) <= 90
+    && Math.abs(Number(longitude)) <= 180;
+}
+
+function normalizeLandmarks(rows) {
+  return rows
+    .filter((stop) => isValidCoordinatePair(stop.latitude, stop.longitude))
+    .map((stop, index) => ({
+      ...stop,
+      id: stop.id || `landmark-${index}`,
+      name: String(stop.name || 'Unnamed landmark').trim() || 'Unnamed landmark',
+      description: String(stop.description || '').trim(),
+      latitude: Number(stop.latitude),
+      longitude: Number(stop.longitude),
+      route_order: Number.isFinite(Number(stop.route_order)) ? Number(stop.route_order) : index,
+      is_map_highlighted: Boolean(stop.is_map_highlighted),
+      stop_label: String(stop.stop_label || `STOP ${String(index + 1).padStart(2, '0')}`).trim(),
+    }));
+}
 
 const directoryData = [
   ['Banks', 'State Bank of India', 'Punnayurkulam branch · Althara'],
@@ -43,6 +65,7 @@ function PublicSite() {
   const [siteSettings, setSiteSettings] = useState({});
   const [directoryEntries, setDirectoryEntries] = useState(directoryData);
   const [busTimings, setBusTimings] = useState(busTimingFallback);
+  const [mapStops, setMapStops] = useState(fallbackStops);
 
   useEffect(() => {
     if (!supabaseConfigured) return undefined;
@@ -50,10 +73,15 @@ function PublicSite() {
       supabase.from('entechemmanur_site_settings').select('key, value'),
       supabase.from('entechemmanur_directory_listings').select('category, name, description').eq('is_published', true).order('created_at', { ascending: false }),
       supabase.from('entechemmanur_bus_timings').select('route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
-    ]).then(([settingsResult, listingsResult, busResult]) => {
+      supabase.from('entechemmanur_landmarks').select('id, name, description, stop_label, latitude, longitude, route_order, is_map_highlighted').eq('is_published', true).order('route_order').order('created_at'),
+    ]).then(([settingsResult, listingsResult, busResult, landmarksResult]) => {
       if (!settingsResult.error) setSiteSettings(Object.fromEntries((settingsResult.data || []).map(({ key, value }) => [key, value])));
       if (!listingsResult.error && listingsResult.data?.length) setDirectoryEntries(listingsResult.data.map(({ category: group, name, description }) => [group, name, description || '']));
       if (!busResult.error && busResult.data?.length) setBusTimings(busResult.data);
+      if (!landmarksResult.error) {
+        const validLandmarks = normalizeLandmarks(landmarksResult.data || []);
+        if (validLandmarks.length) setMapStops(validLandmarks);
+      }
     });
     return undefined;
   }, []);
@@ -70,10 +98,31 @@ function PublicSite() {
   }, [category, query, directoryEntries]);
 
   const moveToNextStop = () => {
-    const currentIndex = stops.indexOf(activeStop);
-    const nextStop = stops[(currentIndex + 1) % stops.length];
-    setActiveStop(nextStop);
+    const currentIndex = mapStops.findIndex((stop) => stop.id === activeStop);
+    const nextStop = mapStops[(currentIndex + 1) % mapStops.length];
+    setActiveStop(nextStop.id);
   };
+
+  const stops = mapStops.map((stop) => stop.id);
+  useEffect(() => {
+    if (mapStops.length && !mapStops.some((stop) => stop.id === activeStop)) {
+      setActiveStop(mapStops[0].id);
+    }
+  }, [activeStop, mapStops]);
+
+  const stopMeta = Object.fromEntries(mapStops.map((stop) => [stop.id, {
+    label: stop.name,
+    stopLabel: stop.stop_label || 'STOP',
+    tagline: `${stop.latitude}, ${stop.longitude} · ${stop.description || 'A local stop on the Chammanur route.'}`,
+  }]));
+  const selectedStop = stopMeta[activeStop] ? activeStop : stops[0];
+  const locations = Object.fromEntries(mapStops.map((stop) => [stop.id, {
+    coordinates: [stop.latitude, stop.longitude],
+    label: stop.name,
+    stopLabel: stop.stop_label,
+    note: stop.description || 'A published Chammanur stop',
+    isHighlighted: stop.is_map_highlighted,
+  }]));
 
   return (
     <>
@@ -137,17 +186,17 @@ function PublicSite() {
               <div className="map-ui">
                 <div className="map-status">
                   <i className="live"></i>
-                  Live route · 3 verified landmarks
+                  Live route · {mapStops.filter((stop) => stop.is_map_highlighted).length} highlighted stops
                 </div>
               </div>
 
               <Suspense fallback={<div className="map-loading">Loading live map…</div>}>
-                <TownMap activeStop={activeStop} onSelectStop={setActiveStop} />
+                <TownMap activeStop={selectedStop} onSelectStop={setActiveStop} locations={locations} />
               </Suspense>
 
               <div className="map-footer">
                 <p>
-                  Currently exploring: <strong>{stopMeta[activeStop].label}</strong>
+                  Currently exploring: <strong>{stopMeta[selectedStop].label}</strong>
                 </p>
                 <motion.button type="button" onClick={moveToNextStop} whileHover={{ x: 5 }} whileTap={{ scale: 0.96 }}>
                   Next stop&nbsp; →
@@ -161,15 +210,13 @@ function PublicSite() {
                   key={key}
                   className="waypoint"
                   data-card={key}
-                  style={{ opacity: activeStop === key ? 1 : 0.48 }}
+                  style={{ opacity: selectedStop === key ? 1 : 0.48 }}
                   onClick={() => setActiveStop(key)}
                   variants={reveal}
                   whileHover={{ x: 8, opacity: 1 }}
                   transition={{ duration: 0.22 }}
                 >
-                  <div className="waypoint-number">
-                    {String(index + 1).padStart(2, '0')} — {index === 0 ? 'FIRST STOP' : index === 1 ? 'THE HEART' : 'KEEP IN TOUCH'}
-                  </div>
+                  <div className="waypoint-number">{stopMeta[key].stopLabel}</div>
                   <div>
                     <h3>{stopMeta[key].label}</h3>
                     <p>{stopMeta[key].tagline}</p>
