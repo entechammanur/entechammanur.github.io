@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { supabase, supabaseConfigured } from './lib/supabase';
 
+import GlassHeader from './components/GlassHeader';
 const TownMap = lazy(() => import('./components/TownMap'));
 const AdminPage = lazy(() => import('./AdminPage'));
 
@@ -58,6 +59,21 @@ const stagger = {
   visible: { transition: { staggerChildren: 0.09 } },
 };
 
+function SkeletonCards({ count }) {
+  return (
+    <div className="skeleton-grid" role="status" aria-label="Loading content">
+      {Array.from({ length: count }, (_, index) => (
+        <div className="skeleton-card" key={index} aria-hidden="true">
+          <span className="skeleton-line skeleton-line-short" />
+          <span className="skeleton-line skeleton-line-title" />
+          <span className="skeleton-line" />
+          <span className="skeleton-line skeleton-line-medium" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PublicSite() {
   const [activeStop, setActiveStop] = useState('attupuram');
   const [category, setCategory] = useState('All');
@@ -66,24 +82,48 @@ function PublicSite() {
   const [directoryEntries, setDirectoryEntries] = useState(directoryData);
   const [busTimings, setBusTimings] = useState(busTimingFallback);
   const [mapStops, setMapStops] = useState(fallbackStops);
+  const [isContentLoading, setIsContentLoading] = useState(supabaseConfigured);
+  const [contentLoadError, setContentLoadError] = useState('');
 
   useEffect(() => {
     if (!supabaseConfigured) return undefined;
-    Promise.all([
-      supabase.from('entechemmanur_site_settings').select('key, value'),
-      supabase.from('entechemmanur_directory_listings').select('category, name, description').eq('is_published', true).order('created_at', { ascending: false }),
-      supabase.from('entechemmanur_bus_timings').select('route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
-      supabase.from('entechemmanur_landmarks').select('id, name, description, stop_label, latitude, longitude, route_order, is_map_highlighted').eq('is_published', true).order('route_order').order('created_at'),
-    ]).then(([settingsResult, listingsResult, busResult, landmarksResult]) => {
-      if (!settingsResult.error) setSiteSettings(Object.fromEntries((settingsResult.data || []).map(({ key, value }) => [key, value])));
-      if (!listingsResult.error && listingsResult.data?.length) setDirectoryEntries(listingsResult.data.map(({ category: group, name, description }) => [group, name, description || '']));
-      if (!busResult.error && busResult.data?.length) setBusTimings(busResult.data);
-      if (!landmarksResult.error) {
-        const validLandmarks = normalizeLandmarks(landmarksResult.data || []);
-        if (validLandmarks.length) setMapStops(validLandmarks);
+    let isActive = true;
+
+    const loadPublicContent = async () => {
+      try {
+        const results = await Promise.all([
+          supabase.from('entechemmanur_site_settings').select('key, value'),
+          supabase.from('entechemmanur_directory_listings').select('category, name, description').eq('is_published', true).order('created_at', { ascending: false }),
+          supabase.from('entechemmanur_bus_timings').select('route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
+          supabase.from('entechemmanur_landmarks').select('id, name, description, stop_label, latitude, longitude, route_order, is_map_highlighted').eq('is_published', true).order('route_order').order('created_at'),
+        ]);
+        if (!isActive) return;
+
+        const [settingsResult, listingsResult, busResult, landmarksResult] = results;
+        if (!settingsResult.error) setSiteSettings(Object.fromEntries((settingsResult.data || []).map(({ key, value }) => [key, value])));
+        if (!listingsResult.error && listingsResult.data?.length) setDirectoryEntries(listingsResult.data.map(({ category: group, name, description }) => [group, name, description || '']));
+        if (!busResult.error && busResult.data?.length) setBusTimings(busResult.data);
+        if (!landmarksResult.error) {
+          const validLandmarks = normalizeLandmarks(landmarksResult.data || []);
+          if (validLandmarks.length) setMapStops(validLandmarks);
+        }
+
+        const queryErrors = results.filter(({ error }) => error).map(({ error }) => error);
+        if (queryErrors.length) {
+          console.error('Some Chammanoor content could not be refreshed.', queryErrors);
+          setContentLoadError('Some live content could not be refreshed. Available preview content is shown where data is missing.');
+        }
+      } catch (error) {
+        if (!isActive) return;
+        console.error('Public Chammanoor content could not be loaded.', error);
+        setContentLoadError('Live content could not be loaded. Preview content is shown instead.');
+      } finally {
+        if (isActive) setIsContentLoading(false);
       }
-    });
-    return undefined;
+    };
+
+    void loadPublicContent();
+    return () => { isActive = false; };
   }, []);
 
   const categories = useMemo(() => ['All', ...new Set(directoryEntries.map(([group]) => group))], [directoryEntries]);
@@ -126,26 +166,9 @@ function PublicSite() {
 
   return (
     <>
+      <GlassHeader />
       <header className="hero" id="top" style={siteSettings.hero_image_url ? { backgroundImage: `linear-gradient(180deg, rgba(6, 23, 20, 0.25), rgba(6, 23, 20, 0.88) 90%), url("${siteSettings.hero_image_url}")` } : undefined}>
         <div className="container">
-          <div className="nav">
-            <a className="brand" href="#top">
-              CHAMMAN<span>U</span>R<span>.</span>
-            </a>
-
-            <nav className="navlinks" aria-label="Main navigation">
-              <a href="#journey">The journey</a>
-              <a href="#directory">Directory</a>
-              <a href="#bus-timings">Bus timings</a>
-              <a href="#stories">Stories</a>
-              <a href="#contact">Contribute</a>
-            </nav>
-
-            <motion.button className="menu" type="button" aria-label="Open menu" whileTap={{ scale: 0.88 }}>
-              ☰
-            </motion.button>
-          </div>
-
           <motion.div
             className="hero-content"
             initial="hidden"
@@ -166,6 +189,7 @@ function PublicSite() {
       </header>
 
       <main>
+        {contentLoadError && <div className="content-warning" role="status">{contentLoadError}</div>}
         <motion.section className="explore" id="journey" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.18 }} variants={stagger}>
           <div className="container">
             <motion.div className="explore-head" variants={reveal}>
@@ -190,7 +214,7 @@ function PublicSite() {
                 </div>
               </div>
 
-              <Suspense fallback={<div className="map-loading">Loading live map…</div>}>
+              <Suspense fallback={<div className="map-loading"><span className="map-loading-spinner" aria-hidden="true" />Loading interactive map…</div>}>
                 <TownMap activeStop={selectedStop} onSelectStop={setActiveStop} locations={locations} />
               </Suspense>
 
@@ -210,20 +234,22 @@ function PublicSite() {
                   key={key}
                   className="waypoint"
                   data-card={key}
-                  style={{ opacity: selectedStop === key ? 1 : 0.48 }}
-                  onClick={() => setActiveStop(key)}
                   variants={reveal}
-                  whileHover={{ x: 8, opacity: 1 }}
-                  transition={{ duration: 0.22 }}
                 >
-                  <div className="waypoint-number">{stopMeta[key].stopLabel}</div>
-                  <div>
-                    <h3>{stopMeta[key].label}</h3>
-                    <p>{stopMeta[key].tagline}</p>
-                  </div>
-                  <motion.button className="waypoint-action" type="button" aria-label={`Show ${stopMeta[key].label} on map`} whileHover={{ rotate: 45 }} whileTap={{ scale: 0.88 }}>
-                    ↗
-                  </motion.button>
+                  <button
+                    className="waypoint-select"
+                    type="button"
+                    aria-label={`Show ${stopMeta[key].label} on map`}
+                    aria-pressed={selectedStop === key}
+                    onClick={() => setActiveStop(key)}
+                  >
+                    <span className="waypoint-number">{stopMeta[key].stopLabel}</span>
+                    <span className="waypoint-copy">
+                      <strong>{stopMeta[key].label}</strong>
+                      <span>{stopMeta[key].tagline}</span>
+                    </span>
+                    <span className="waypoint-action" aria-hidden="true">↗</span>
+                  </button>
                 </motion.article>
               ))}
             </motion.div>
@@ -261,6 +287,7 @@ function PublicSite() {
                   key={item}
                   type="button"
                   className={`filter ${category === item ? 'active' : ''}`}
+                  aria-pressed={category === item}
                   onClick={() => setCategory(item)}
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.95 }}
@@ -272,7 +299,9 @@ function PublicSite() {
 
             <motion.div className="directory-grid" variants={stagger}>
               <AnimatePresence mode="popLayout">
-              {filteredData.length > 0 ? (
+              {isContentLoading ? (
+                <SkeletonCards count={6} />
+              ) : filteredData.length > 0 ? (
                 filteredData.map(([group, title, description]) => (
                   <motion.article
                     key={`${group}-${title}`}
@@ -291,7 +320,12 @@ function PublicSite() {
                   </motion.article>
                 ))
               ) : (
-                <motion.p className="no-results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>No listings found. Try another search.</motion.p>
+                <motion.div className="empty-state" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+                  <span className="empty-state-icon" aria-hidden="true">⌕</span>
+                  <strong>No places found</strong>
+                  <p>Try a different search or clear the selected category.</p>
+                  <button type="button" onClick={() => { setQuery(''); setCategory('All'); }}>Clear filters</button>
+                </motion.div>
               )}
               </AnimatePresence>
             </motion.div>
@@ -305,7 +339,7 @@ function PublicSite() {
               <p>Useful departure times for journeys through Chammanoor. Confirm timings locally before travelling.</p>
             </motion.div>
             <motion.div className="bus-grid" variants={stagger}>
-              {busTimings.map((bus) => (
+              {isContentLoading ? <SkeletonCards count={3} /> : busTimings.map((bus) => (
                 <motion.article className="bus-card" key={`${bus.route_name}-${bus.departure_time}`} variants={reveal} whileHover={{ y: -5 }}>
                   <div className="bus-time">{bus.departure_time?.slice(0, 5)}</div>
                   <div><h3>{bus.route_name}</h3><p>{bus.direction} · {bus.operating_days}</p><small>{bus.via || 'Local route'}{bus.arrival_time ? ` · Arrives ${bus.arrival_time.slice(0, 5)}` : ''}</small></div>

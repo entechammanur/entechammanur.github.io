@@ -69,6 +69,33 @@ npm run preview -- --host
 - `lib/supabase.js` – Supabase browser client configuration
 - `supabase/migrations/` – ordered SQL files to run in Supabase SQL Editor
 
+## Public app interface
+
+The public experience is composed as a single-page journey:
+
+- `PublicSite` in `App.jsx` owns shared town content and section state.
+- `GlassHeader` in `components/GlassHeader.jsx` owns pinned desktop navigation and the accessible mobile drawer.
+- The journey, directory, bus schedule, and stories are sections in `PublicSite`; `TownMap` is lazy-loaded as an interactive tool.
+- `styles.css` provides the responsive layouts, glass surface, focus states, and reduced-motion behavior.
+
+The header uses a translucent color fallback first, then progressive backdrop blur. Its fixed position is independent of the hero section, so scrolling does not move or resize the navigation:
+
+```css
+.glass-header {
+  position: fixed;
+  inset: 12px 0 auto;
+  z-index: 1000;
+}
+
+.glass-header-inner {
+  background: rgba(8, 29, 25, 0.76);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 40px rgba(2, 14, 11, 0.2);
+}
+```
+
 ## Notes
 
 This is a polished Phase 1 prototype built around the requested immersive town journey, searchable directory, and waypoint storytelling experience.
