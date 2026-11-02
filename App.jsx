@@ -526,10 +526,10 @@ function PublicSite() {
 
       <footer className="site-footer">
         <div className="container footer-layout">
-          <p>Chammanur public guide.</p>
+          <p>© Ente Chammanur.</p>
           <nav aria-label="Footer navigation">
             <a href="#top">Back to top</a>
-            <a href="#admin">Administrator access</a>
+            <span>For website queries, contact the developer: <a href="mailto:entechammanur@gmail.com">entechammanur@gmail.com</a></span>
           </nav>
           <small>{new Date().getFullYear()}</small>
         </div>
