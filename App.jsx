@@ -1,22 +1,27 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { supabase, supabaseConfigured } from './lib/supabase';
-
+import { defaultAboutSettings } from './lib/siteSettings';
 import GlassHeader from './components/GlassHeader';
+
 const TownMap = lazy(() => import('./components/TownMap'));
 const AdminPage = lazy(() => import('./AdminPage'));
 
 const fallbackStops = [
-  { id: 'attupuram', name: 'Attupuram Centre', stop_label: 'STOP 01', description: 'A verified point on your local route.', latitude: 10.670849, longitude: 76.002072, route_order: 1, is_map_highlighted: true },
-  { id: 'chammanoor', name: 'Chammanoor Centre', stop_label: 'STOP 02', description: 'The heart of the town experience.', latitude: 10.675411, longitude: 76.020533, route_order: 2, is_map_highlighted: true },
-  { id: 'school', name: 'Amal English School', stop_label: 'STOP 03', description: 'A verified landmark supplied by you.', latitude: 10.677212, longitude: 76.024398, route_order: 3, is_map_highlighted: true },
+  { id: 'attupuram', name: 'Attupuram Centre', stop_label: 'Stop 01', description: 'A verified point on the local route.', latitude: 10.670849, longitude: 76.002072, route_order: 1, is_map_highlighted: true },
+  { id: 'chammanur', name: 'Chammanur Centre', stop_label: 'Stop 02', description: 'A verified point on the local route.', latitude: 10.675411, longitude: 76.020533, route_order: 2, is_map_highlighted: true },
+  { id: 'school', name: 'Amal English School', stop_label: 'Stop 03', description: 'A verified local landmark.', latitude: 10.677212, longitude: 76.024398, route_order: 3, is_map_highlighted: true },
 ];
 
 function isValidCoordinatePair(latitude, longitude) {
-  return Number.isFinite(Number(latitude))
-    && Number.isFinite(Number(longitude))
-    && Math.abs(Number(latitude)) <= 90
-    && Math.abs(Number(longitude)) <= 180;
+  if (latitude == null || longitude == null || String(latitude).trim() === '' || String(longitude).trim() === '') {
+    return false;
+  }
+  const numericLatitude = Number(latitude);
+  const numericLongitude = Number(longitude);
+  return Number.isFinite(numericLatitude)
+    && Number.isFinite(numericLongitude)
+    && Math.abs(numericLatitude) <= 90
+    && Math.abs(numericLongitude) <= 180;
 }
 
 function normalizeLandmarks(rows) {
@@ -31,46 +36,69 @@ function normalizeLandmarks(rows) {
       longitude: Number(stop.longitude),
       route_order: Number.isFinite(Number(stop.route_order)) ? Number(stop.route_order) : index,
       is_map_highlighted: Boolean(stop.is_map_highlighted),
-      stop_label: String(stop.stop_label || `STOP ${String(index + 1).padStart(2, '0')}`).trim(),
+      stop_label: String(stop.stop_label || `Stop ${String(index + 1).padStart(2, '0')}`).trim(),
     }));
 }
 
-const directoryData = [
-  ['Banks', 'State Bank of India', 'Punnayurkulam branch · Althara'],
-  ['Schools', 'Amal English School', 'chammanur · Via Punnayurkulam'],
-  ['Services', 'chammanur Post Office', 'PIN 679561 · Local services'],
-  ['Banks', 'South Indian Bank', 'Punnayurkulam branch'],
-  ['Health', 'Medical Shop', 'Add your trusted local listing'],
-  ['Transport', 'Auto / Taxi Stand', 'Add contact and stand location'],
-];
-const busTimingFallback = [
-  { bus_name: '', route_name: 'Chammanoor → Guruvayur', direction: 'To Guruvayur', departure_time: '06:20', arrival_time: '07:05', via: 'Punnayurkulam · Chavakkad', operating_days: 'Daily' },
-  { bus_name: '', route_name: 'Chammanoor → Ponnani', direction: 'To Ponnani', departure_time: '07:10', arrival_time: '08:15', via: 'Althara · Vadakkekad', operating_days: 'Daily' },
-  { bus_name: '', route_name: 'Guruvayur → Chammanoor', direction: 'Towards Chammanoor', departure_time: '17:30', arrival_time: '18:15', via: 'Chavakkad · Punnayurkulam', operating_days: 'Mon–Sat' },
-];
+function isLeadershipEntry(entry) {
+  const category = String(entry.category || '').toLowerCase();
+  return ['leadership', 'representative', 'ward member', 'panchayat'].some((term) => category.includes(term));
+}
 
-const reveal = {
-  hidden: { opacity: 0, y: 28 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } },
-};
+function matchesSearch(term, ...values) {
+  return !term || values.filter(Boolean).join(' ').toLowerCase().includes(term);
+}
 
-const stagger = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.09 } },
-};
-
-function SkeletonCards({ count }) {
+function SkeletonCards({ count = 3 }) {
   return (
-    <div className="skeleton-grid" role="status" aria-label="Loading content">
-      {Array.from({ length: count }, (_, index) => (
-        <div className="skeleton-card" key={index} aria-hidden="true">
-          <span className="skeleton-line skeleton-line-short" />
-          <span className="skeleton-line skeleton-line-title" />
-          <span className="skeleton-line" />
-          <span className="skeleton-line skeleton-line-medium" />
-        </div>
-      ))}
+    <div className="loading-list" role="status" aria-label="Loading public information">
+      {Array.from({ length: count }, (_, index) => <span className="loading-line" key={index} />)}
     </div>
+  );
+}
+
+function formatDate(value, options = { dateStyle: 'medium' }) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, options).format(date);
+}
+
+function DirectoryRecord({ entry, person = false }) {
+  const phone = String(entry.phone || '').replace(/[^\d+*#,;]/g, '');
+  const whatsapp = String(entry.whatsapp || '').replace(/\D/g, '');
+  const coordinates = isValidCoordinatePair(entry.latitude, entry.longitude)
+    ? `${Number(entry.latitude)},${Number(entry.longitude)}`
+    : '';
+  const mapUrl = coordinates
+    ? `https://www.openstreetmap.org/?mlat=${Number(entry.latitude)}&mlon=${Number(entry.longitude)}#map=16/${coordinates}`
+    : '';
+
+  return (
+    <article className={`directory-record${person ? ' directory-record-person' : ''}`}>
+      {entry.photo_url && (
+        <img
+          className="record-photo"
+          src={entry.photo_url}
+          alt={`Photo of ${entry.name}`}
+          width="640"
+          height="480"
+          loading="lazy"
+        />
+      )}
+      <div className="record-copy">
+        <p className="record-category">{person ? 'Community representative' : entry.category}</p>
+        <h3>{entry.name}</h3>
+        {entry.description && <p className="record-description">{entry.description}</p>}
+        {entry.address && <p className="record-address">{entry.address}</p>}
+        {(phone || whatsapp || mapUrl) && (
+          <div className="record-actions">
+            {phone && <a href={`tel:${phone}`}>Call</a>}
+            {whatsapp && <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer">WhatsApp</a>}
+            {mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer">View location</a>}
+          </div>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -79,9 +107,11 @@ function PublicSite() {
   const [category, setCategory] = useState('All');
   const [query, setQuery] = useState('');
   const [siteSettings, setSiteSettings] = useState({});
-  const [directoryEntries, setDirectoryEntries] = useState(directoryData);
-  const [busTimings, setBusTimings] = useState(busTimingFallback);
+  const [directoryEntries, setDirectoryEntries] = useState([]);
+  const [busTimings, setBusTimings] = useState([]);
   const [mapStops, setMapStops] = useState(fallbackStops);
+  const [notices, setNotices] = useState([]);
+  const [events, setEvents] = useState([]);
   const [isContentLoading, setIsContentLoading] = useState(supabaseConfigured);
   const [contentLoadError, setContentLoadError] = useState('');
 
@@ -93,30 +123,70 @@ function PublicSite() {
       try {
         const results = await Promise.all([
           supabase.from('entechemmanur_site_settings').select('key, value'),
-          supabase.from('entechemmanur_directory_listings').select('category, name, description').eq('is_published', true).order('created_at', { ascending: false }),
+          supabase.from('entechemmanur_directory_listings').select('id, category, name, description, phone, whatsapp, address, latitude, longitude, photo_url').eq('is_published', true).order('created_at', { ascending: false }),
           supabase.from('entechemmanur_bus_timings').select('bus_name, route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
           supabase.from('entechemmanur_landmarks').select('id, name, description, stop_label, latitude, longitude, route_order, is_map_highlighted').eq('is_published', true).order('route_order').order('created_at'),
+          supabase.from('entechemmanur_notices').select('id, title, body, severity, published_until').eq('is_published', true).order('created_at', { ascending: false }),
+          supabase.from('entechemmanur_events').select('id, title, description, starts_at, ends_at, venue').eq('is_published', true).order('starts_at'),
         ]);
         if (!isActive) return;
 
-        const [settingsResult, listingsResult, busResult, landmarksResult] = results;
-        if (!settingsResult.error) setSiteSettings(Object.fromEntries((settingsResult.data || []).map(({ key, value }) => [key, value])));
-        if (!listingsResult.error && listingsResult.data?.length) setDirectoryEntries(listingsResult.data.map(({ category: group, name, description }) => [group, name, description || '']));
-        if (!busResult.error && busResult.data?.length) setBusTimings(busResult.data);
+        const [settingsResult, initialListingsResult, busResult, landmarksResult, noticesResult, eventsResult] = results;
+        let listingsResult = initialListingsResult;
+        let photoMigrationMissing = false;
+        if (
+          listingsResult.error?.code === '42703'
+          && /column .*\.photo_url does not exist/.test(listingsResult.error.message || '')
+        ) {
+          listingsResult = await supabase
+            .from('entechemmanur_directory_listings')
+            .select('id, category, name, description, phone, whatsapp, address, latitude, longitude')
+            .eq('is_published', true)
+            .order('created_at', { ascending: false });
+          photoMigrationMissing = !listingsResult.error;
+        }
+        if (!isActive) return;
+
+        if (!settingsResult.error) {
+          setSiteSettings(Object.fromEntries((settingsResult.data || []).map(({ key, value }) => [key, value])));
+        }
+        if (!listingsResult.error) setDirectoryEntries(listingsResult.data || []);
+        if (!busResult.error) setBusTimings(busResult.data || []);
         if (!landmarksResult.error) {
           const validLandmarks = normalizeLandmarks(landmarksResult.data || []);
           if (validLandmarks.length) setMapStops(validLandmarks);
         }
 
-        const queryErrors = results.filter(({ error }) => error).map(({ error }) => error);
-        if (queryErrors.length) {
-          console.error('Some Chammanoor content could not be refreshed.', queryErrors);
-          setContentLoadError('Some live content could not be refreshed. Available preview content is shown where data is missing.');
+        const now = Date.now();
+        if (!noticesResult.error) {
+          setNotices((noticesResult.data || []).filter((notice) => (
+            !notice.published_until || new Date(notice.published_until).getTime() >= now
+          )));
         }
+        if (!eventsResult.error) {
+          setEvents((eventsResult.data || []).filter((event) => (
+            event.ends_at
+              ? new Date(event.ends_at).getTime() >= now
+              : new Date(event.starts_at).getTime() >= now
+          )));
+        }
+
+        const queryErrors = [settingsResult, listingsResult, busResult, landmarksResult, noticesResult, eventsResult]
+          .filter(({ error }) => error)
+          .map(({ error }) => error);
+        const warnings = [];
+        if (photoMigrationMissing) {
+          warnings.push('Directory listings are available, but profile photos need database migration 10.');
+        }
+        if (queryErrors.length) {
+          console.error('Some Chammanur public information could not be refreshed.', queryErrors);
+          warnings.push('Some public information could not be refreshed. The sections that loaded are still available.');
+        }
+        setContentLoadError(warnings.join(' '));
       } catch (error) {
         if (!isActive) return;
-        console.error('Public Chammanoor content could not be loaded.', error);
-        setContentLoadError('Live content could not be loaded. Preview content is shown instead.');
+        console.error('Chammanur public information could not be loaded.', error);
+        setContentLoadError('Public information could not be loaded. Please try again later.');
       } finally {
         if (isActive) setIsContentLoading(false);
       }
@@ -126,255 +196,293 @@ function PublicSite() {
     return () => { isActive = false; };
   }, []);
 
-  const categories = useMemo(() => ['All', ...new Set(directoryEntries.map(([group]) => group))], [directoryEntries]);
-
-  const filteredData = useMemo(() => {
+  const categories = useMemo(
+    () => ['All', ...new Set(directoryEntries.map((entry) => entry.category).filter(Boolean))],
+    [directoryEntries],
+  );
+  const filteredEntries = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return directoryEntries.filter(([group, title, description]) => {
-      const matchesCategory = category === 'All' || group === category;
-      const matchesQuery = !term || `${group} ${title} ${description}`.toLowerCase().includes(term);
+    return directoryEntries.filter((entry) => {
+      const matchesCategory = category === 'All' || entry.category === category;
+      const matchesQuery = matchesSearch(term,
+        entry.name,
+        entry.category,
+        entry.description,
+        entry.address,
+        entry.phone,
+        entry.whatsapp,
+      );
       return matchesCategory && matchesQuery;
     });
   }, [category, query, directoryEntries]);
 
-  const moveToNextStop = () => {
-    const currentIndex = mapStops.findIndex((stop) => stop.id === activeStop);
-    const nextStop = mapStops[(currentIndex + 1) % mapStops.length];
-    setActiveStop(nextStop.id);
-  };
+  const searchTerm = query.trim().toLowerCase();
+  const filteredLandmarks = mapStops.filter((stop) => matchesSearch(searchTerm, stop.name, stop.description, stop.stop_label, stop.latitude, stop.longitude));
+  const filteredBusTimings = busTimings.filter((bus) => matchesSearch(
+    searchTerm,
+    bus.bus_name,
+    bus.route_name,
+    bus.direction,
+    bus.via,
+    bus.operating_days,
+    bus.departure_time,
+  ));
+  const filteredNotices = notices.filter((notice) => matchesSearch(searchTerm, notice.title, notice.body, notice.severity));
+  const filteredEvents = events.filter((event) => matchesSearch(searchTerm, event.title, event.description, event.venue));
 
-  const stops = mapStops.map((stop) => stop.id);
-  useEffect(() => {
-    if (mapStops.length && !mapStops.some((stop) => stop.id === activeStop)) {
-      setActiveStop(mapStops[0].id);
-    }
-  }, [activeStop, mapStops]);
-
-  const stopMeta = Object.fromEntries(mapStops.map((stop) => [stop.id, {
-    label: stop.name,
-    stopLabel: stop.stop_label || 'STOP',
-    tagline: `${stop.latitude}, ${stop.longitude} · ${stop.description || 'A local stop on the Chammanur route.'}`,
-  }]));
-  const selectedStop = stopMeta[activeStop] ? activeStop : stops[0];
+  const people = filteredEntries.filter(isLeadershipEntry);
+  const places = filteredEntries.filter((entry) => !isLeadershipEntry(entry));
+  const hasPeople = directoryEntries.some(isLeadershipEntry);
+  const selectedStop = mapStops.some((stop) => stop.id === activeStop) ? activeStop : mapStops[0]?.id;
   const locations = Object.fromEntries(mapStops.map((stop) => [stop.id, {
     coordinates: [stop.latitude, stop.longitude],
     label: stop.name,
-    stopLabel: stop.stop_label,
-    note: stop.description || 'A published Chammanur stop',
     isHighlighted: stop.is_map_highlighted,
   }]));
+  const about = { ...defaultAboutSettings, ...siteSettings };
+
+  const moveToNextStop = () => {
+    const currentIndex = mapStops.findIndex((stop) => stop.id === selectedStop);
+    const nextStop = mapStops[(currentIndex + 1) % mapStops.length];
+    if (nextStop) setActiveStop(nextStop.id);
+  };
 
   return (
     <>
-      <GlassHeader />
-      <header className="hero" id="top" style={siteSettings.hero_image_url ? { backgroundImage: `linear-gradient(180deg, rgba(6, 23, 20, 0.25), rgba(6, 23, 20, 0.88) 90%), url("${siteSettings.hero_image_url}")` } : undefined}>
-        <div className="container">
-          <motion.div
-            className="hero-content"
-            initial="hidden"
-            animate="visible"
-            variants={stagger}
-          >
-            <motion.div className="eyebrow" variants={reveal}>{siteSettings.hero_eyebrow || 'A living map of Kerala · 10°40′N 76°02′E'}</motion.div>
-            <motion.h1 variants={reveal}>{siteSettings.hero_title || 'Find your way back home.'}</motion.h1>
-            <motion.p className="hero-copy" variants={reveal}>
-              {siteSettings.hero_description || 'A new way to experience Chammanoor — its green roads, familiar landmarks and the people who make this place feel like home.'}
-            </motion.p>
-            <motion.a className="primary" href="#journey" variants={reveal} whileHover={{ y: -4, scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              Start the journey
-            </motion.a>
-          </motion.div>
+      <GlassHeader hasPeople={hasPeople} hasUpdates={events.length > 0} hasNotices={notices.length > 0} />
+      <header className="hero" id="top">
+        <div className="container hero-layout">
+          <div className="hero-copy">
+            <h1>{siteSettings.hero_title || 'A guide to Chammanur.'}</h1>
+            <p>{siteSettings.hero_description || 'Find local places, public representatives, services and travel information.'}</p>
+            <div className="hero-actions">
+              <a className="button button-primary" href="#directory">Find information</a>
+              <a className="button button-secondary" href="#places">Explore the map</a>
+            </div>
+          </div>
+          <figure className="hero-figure">
+            <img
+              src={siteSettings.hero_image_url || '/images/entechammanurhome.png'}
+              alt={siteSettings.hero_image_url ? 'A view of Chammanur' : 'Aerial view of a tree-lined road in Chammanur'}
+              width="1920"
+              height="2560"
+              fetchpriority="high"
+            />
+            <figcaption>Chammanur, Kerala</figcaption>
+          </figure>
         </div>
-        <div className="scroll-cue">Scroll to explore</div>
       </header>
 
       <main>
-        {contentLoadError && <div className="content-warning" role="status">{contentLoadError}</div>}
-        <motion.section className="explore" id="journey" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.18 }} variants={stagger}>
+        {contentLoadError && <p className="content-warning" role="status">{contentLoadError}</p>}
+
+        {notices.length > 0 && (
+          <section className="notices" id="notices" aria-labelledby="notices-title">
+            <div className="container">
+              <h2 id="notices-title">Public notices</h2>
+              <div className="notice-list">
+                {filteredNotices.length > 0 ? filteredNotices.map((notice) => (
+                  <article className="notice-row" key={notice.id}>
+                    <p className="notice-kind">{notice.severity === 'urgent' ? 'Urgent notice' : notice.severity === 'important' ? 'Important notice' : 'Community notice'}</p>
+                    <h3>{notice.title}</h3>
+                    <p>{notice.body}</p>
+                  </article>
+                )) : <p className="empty-line">No notices match this search.</p>}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section className="directory section-pad" id="directory">
           <div className="container">
-            <motion.div className="explore-head" variants={reveal}>
+            <div className="section-heading">
               <div>
-                <div className="kicker">01 / Roaming around town</div>
-                <h2 className="title">
-                  Take the scenic route
-                  <br />
-                  <em>through chammanur.</em>
-                </h2>
+                <h2>Find local information</h2>
+                <p>Search published places, services and community representatives.</p>
               </div>
-              <p>
-                Follow the road from Punnayurkulam Junction into the heart of our town. Tap a marker to pause.
-              </p>
-            </motion.div>
+            </div>
 
-            <motion.div className="map-stage" id="map" variants={reveal}>
-              <div className="map-ui">
-                <div className="map-status">
-                  <i className="live"></i>
-                  Live route · {mapStops.filter((stop) => stop.is_map_highlighted).length} highlighted stops
-                </div>
-              </div>
-
-              <Suspense fallback={<div className="map-loading"><span className="map-loading-spinner" aria-hidden="true" />Loading interactive map…</div>}>
-                <TownMap activeStop={selectedStop} onSelectStop={setActiveStop} locations={locations} />
-              </Suspense>
-
-              <div className="map-footer">
-                <p>
-                  Currently exploring: <strong>{stopMeta[selectedStop].label}</strong>
-                </p>
-                <motion.button type="button" onClick={moveToNextStop} whileHover={{ x: 5 }} whileTap={{ scale: 0.96 }}>
-                  Next stop&nbsp; →
-                </motion.button>
-              </div>
-            </motion.div>
-
-            <motion.div className="waypoints" id="waypointList" variants={stagger}>
-              {stops.map((key, index) => (
-                <motion.article
-                  key={key}
-                  className="waypoint"
-                  data-card={key}
-                  variants={reveal}
-                >
-                  <button
-                    className="waypoint-select"
-                    type="button"
-                    aria-label={`Show ${stopMeta[key].label} on map`}
-                    aria-pressed={selectedStop === key}
-                    onClick={() => setActiveStop(key)}
-                  >
-                    <span className="waypoint-number">{stopMeta[key].stopLabel}</span>
-                    <span className="waypoint-copy">
-                      <strong>{stopMeta[key].label}</strong>
-                      <span>{stopMeta[key].tagline}</span>
-                    </span>
-                    <span className="waypoint-action" aria-hidden="true">↗</span>
-                  </button>
-                </motion.article>
-              ))}
-            </motion.div>
-          </div>
-        </motion.section>
-
-        <motion.section className="directory" id="directory" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.16 }} variants={stagger}>
-          <div className="container">
-            <motion.div className="directory-header" variants={reveal}>
-              <div>
-                <div className="kicker">02 / Find your people</div>
-                <h2 className="title">
-                  The local
-                  <br />
-                  <em>directory.</em>
-                </h2>
-              </div>
-              <p>Useful places, familiar faces and everything you need — all in one place.</p>
-            </motion.div>
-
-            <motion.input
+            <label className="search-label" htmlFor="town-search">Search public information</label>
+            <input
               className="search"
+              id="town-search"
               type="search"
-              placeholder="Search the directory…"
-              aria-label="Search the directory"
+              placeholder="Place, person, landmark, route or event"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              variants={reveal}
-              whileFocus={{ scale: 1.01 }}
             />
 
-            <motion.div className="filters" variants={reveal}>
+            <div className="filters" aria-label="Filter directory by category">
               {categories.map((item) => (
-                <motion.button
+                <button
                   key={item}
                   type="button"
-                  className={`filter ${category === item ? 'active' : ''}`}
+                  className={`filter${category === item ? ' active' : ''}`}
                   aria-pressed={category === item}
                   onClick={() => setCategory(item)}
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.95 }}
                 >
                   {item}
-                </motion.button>
+                </button>
               ))}
-            </motion.div>
+            </div>
 
-            <motion.div className="directory-grid" variants={stagger}>
-              <AnimatePresence mode="popLayout">
-              {isContentLoading ? (
-                <SkeletonCards count={6} />
-              ) : filteredData.length > 0 ? (
-                filteredData.map(([group, title, description]) => (
-                  <motion.article
-                    key={`${group}-${title}`}
-                    className="directory-card"
-                    variants={reveal}
-                    initial="hidden"
-                    animate="visible"
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    layout
-                    whileHover={{ y: -7, boxShadow: '0 18px 34px rgba(23, 59, 49, 0.11)' }}
-                  >
-                    <div className="kicker">{group}</div>
-                    <h3>{title}</h3>
-                    <p>{description}</p>
-                    <small>Explore listing&nbsp; ↗</small>
-                  </motion.article>
-                ))
-              ) : (
-                <motion.div className="empty-state" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-                  <span className="empty-state-icon" aria-hidden="true">⌕</span>
-                  <strong>No places found</strong>
-                  <p>Try a different search or clear the selected category.</p>
-                  <button type="button" onClick={() => { setQuery(''); setCategory('All'); }}>Clear filters</button>
-                </motion.div>
-              )}
-              </AnimatePresence>
-            </motion.div>
-          </div>
-        </motion.section>
-
-        <motion.section className="buses" id="bus-timings" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.16 }} variants={stagger}>
-          <div className="container">
-            <motion.div className="directory-header" variants={reveal}>
-              <div><div className="kicker">03 / Travel locally</div><h2 className="title">Bus <em>timings.</em></h2></div>
-              <p>Useful departure times for journeys through Chammanoor. Confirm timings locally before travelling.</p>
-            </motion.div>
-            <motion.div className="bus-grid" variants={stagger}>
-              {isContentLoading ? <SkeletonCards count={3} /> : busTimings.map((bus) => (
-                <motion.article className="bus-card" key={`${bus.route_name}-${bus.departure_time}`} variants={reveal} whileHover={{ y: -5 }}>
-                  <div className="bus-time">{bus.departure_time?.slice(0, 5)}</div>
-                  <div className="bus-details">
-                    <span className="bus-name-label">Bus name</span>
-                    <strong className="bus-name">{bus.bus_name?.trim() || 'Not provided'}</strong>
-                    <h3>{bus.route_name}</h3>
-                    <p>{bus.direction} · {bus.operating_days}</p>
-                    <small>{bus.via || 'Local route'}{bus.arrival_time ? ` · Arrives ${bus.arrival_time.slice(0, 5)}` : ''}</small>
+            {isContentLoading ? <SkeletonCards /> : filteredEntries.length === 0 ? (
+              <div className="empty-state" role="status">
+                <h3>{directoryEntries.length === 0 && !query ? 'The directory is ready for local information.' : 'No matching places or people.'}</h3>
+                <p>{directoryEntries.length === 0 && !query ? 'Published listings will appear here when an administrator adds them.' : 'Other matching information appears in its section below. Try another search or clear the category.'}</p>
+                {directoryEntries.length > 0 && (
+                  <button className="button button-secondary" type="button" onClick={() => { setQuery(''); setCategory('All'); }}>
+                    Clear search
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {places.length > 0 && (
+                  <div className="directory-group">
+                    <h3 className="group-heading">Places and services</h3>
+                    <div className="directory-grid">
+                      {places.map((entry) => <DirectoryRecord entry={entry} key={entry.id} />)}
+                    </div>
                   </div>
-                </motion.article>
-              ))}
-            </motion.div>
-            <p className="bus-note">Times are community-maintained and may change. Please verify at the stop or with the operator.</p>
+                )}
+                {people.length > 0 && (
+                  <div className="directory-group people-group" id="people">
+                    <h3 className="group-heading">Public representatives</h3>
+                    <p className="group-intro">Contact and ward information appears only when published by an administrator.</p>
+                    <div className="people-grid">
+                      {people.map((entry) => <DirectoryRecord entry={entry} person key={entry.id} />)}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        </motion.section>
+        </section>
 
-        <motion.section id="stories" className="stories" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.3 }} transition={{ duration: 0.9 }}>
+        <section className="places-section section-pad" id="places">
           <div className="container">
-            <div className="kicker">03 / A place with stories</div>
-            <motion.h2 className="title title-story" initial={{ y: 24 }} whileInView={{ y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, ease: 'easeOut' }}>
-              Every road has
-              <br />
-              <em>a memory.</em>
-            </motion.h2>
+            <div className="section-heading">
+              <div>
+                <h2>Landmarks and routes</h2>
+                <p>Choose a published stop to see where it sits on the map.</p>
+              </div>
+            </div>
+
+            <div className="map-stage">
+              <Suspense fallback={<div className="map-loading" role="status">Loading the town map…</div>}>
+                <TownMap activeStop={selectedStop} onSelectStop={setActiveStop} locations={locations} />
+              </Suspense>
+            </div>
+            <div className="map-footer">
+              <p>Selected place: <strong>{mapStops.find((stop) => stop.id === selectedStop)?.name || 'Chammanur'}</strong></p>
+              <button className="text-button" type="button" onClick={moveToNextStop}>Next landmark</button>
+            </div>
+            <ol className="landmark-list">
+              {filteredLandmarks.map((stop) => (
+                <li key={stop.id}>
+                  <button
+                    className="landmark-button"
+                    type="button"
+                    aria-pressed={selectedStop === stop.id}
+                    onClick={() => setActiveStop(stop.id)}
+                  >
+                    <span className="landmark-name">{stop.name}</span>
+                    <span className="landmark-description">{stop.description || 'Published local landmark'}</span>
+                    <span className="landmark-coordinate">{stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+            {filteredLandmarks.length === 0 && <p className="empty-line">No landmarks match this search.</p>}
           </div>
-        </motion.section>
+        </section>
+
+        <section className="transport section-pad" id="bus-timings">
+          <div className="container">
+            <div className="section-heading">
+              <div>
+                <h2>Bus information</h2>
+                <p>Schedules are maintained by local administrators. Confirm before travelling.</p>
+              </div>
+            </div>
+            {isContentLoading ? <SkeletonCards /> : busTimings.length === 0 ? (
+              <p className="empty-line">No bus schedules have been published yet.</p>
+            ) : filteredBusTimings.length === 0 ? (
+              <p className="empty-line">No bus schedules match this search.</p>
+            ) : (
+              <div className="bus-list">
+                {filteredBusTimings.map((bus) => (
+                  <article className="bus-row" key={`${bus.route_name}-${bus.departure_time}`}>
+                    <time className="bus-time">{bus.departure_time?.slice(0, 5) || '—'}</time>
+                    <div className="bus-route">
+                      <h3>{bus.route_name}</h3>
+                      <p>{[bus.direction, bus.via, bus.operating_days].filter(Boolean).join(' · ')}</p>
+                      {bus.bus_name && <p>{bus.bus_name}</p>}
+                    </div>
+                    {bus.arrival_time && <p className="bus-arrival">Arrival {bus.arrival_time.slice(0, 5)}</p>}
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {events.length > 0 && (
+          <section className="events section-pad" id="updates">
+            <div className="container">
+              <div className="section-heading">
+                <div>
+                  <h2>Community events</h2>
+                  <p>Upcoming events shared by the town.</p>
+                </div>
+              </div>
+              <div className="event-list">
+                {filteredEvents.length > 0 ? filteredEvents.map((event) => (
+                  <article className="event-row" key={event.id}>
+                    <time dateTime={event.starts_at}>{formatDate(event.starts_at, { dateStyle: 'medium', timeStyle: 'short' })}</time>
+                    <div>
+                      <h3>{event.title}</h3>
+                      {event.description && <p>{event.description}</p>}
+                    </div>
+                    {event.venue && <p>{event.venue}</p>}
+                  </article>
+                )) : <p className="empty-line">No events match this search.</p>}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section className="about section-pad" id="about">
+          <div className="container about-layout">
+            <div>
+              <h2>About Chammanur</h2>
+              <p className="about-intro">{about.about_intro}</p>
+            </div>
+            <dl className="about-facts">
+              <div>
+                <dt>Location</dt>
+                <dd>{about.about_location}</dd>
+                <dd>{about.about_location_detail}</dd>
+              </div>
+              <div>
+                <dt>PIN code</dt>
+                <dd>{about.about_pin_code}</dd>
+                <dd>{about.about_pin_detail}</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
       </main>
 
-      <footer id="contact">
-        <div className="container">
-          <strong>CHAMMANUR.</strong>
-          <br />
-          <span>
-            Built with care for the people of chammanur · {new Date().getFullYear()}
-          </span>
+      <footer className="site-footer">
+        <div className="container footer-layout">
+          <p>Chammanur public guide.</p>
+          <nav aria-label="Footer navigation">
+            <a href="#top">Back to top</a>
+            <a href="#admin">Administrator access</a>
+          </nav>
+          <small>{new Date().getFullYear()}</small>
         </div>
       </footer>
     </>
@@ -391,7 +499,7 @@ export default function App() {
   }, []);
 
   return (
-    <Suspense fallback={<main className="admin-shell"><div className="admin-auth-card"><p className="admin-muted">Loading Chammanoor…</p></div></main>}>
+    <Suspense fallback={<main className="admin-shell"><div className="admin-auth-card"><p className="admin-muted">Loading Chammanur…</p></div></main>}>
       {isAdminRoute ? <AdminPage /> : <PublicSite />}
     </Suspense>
   );

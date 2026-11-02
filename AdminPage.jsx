@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { supabase, supabaseConfigured } from './lib/supabase';
 import ContentAdmin from './ContentAdmin';
 
@@ -74,8 +73,8 @@ function AdminLogin({ onAuthenticated }) {
 
   return (
     <main className="admin-shell">
-      <motion.div className="admin-auth-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <a className="brand admin-brand" href="#top">CHAMMAN<span>U</span>R<span>.</span></a>
+      <div className="admin-auth-card">
+        <a className="brand admin-brand" href="#top">Chammanur</a>
         <div className="kicker">Admin access</div>
         <h1>{mode === 'login' ? 'Welcome back.' : 'Request access.'}</h1>
         <p className="admin-muted">
@@ -100,8 +99,8 @@ function AdminLogin({ onAuthenticated }) {
         <button className="admin-switch" type="button" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage(''); }}>
           {mode === 'login' ? 'Need access? Request an account' : 'Already approved? Sign in'}
         </button>
-        <a className="admin-back" href="#top">← Return to public site</a>
-      </motion.div>
+        <a className="admin-back" href="#top">Return to public site</a>
+      </div>
     </main>
   );
 }
@@ -166,7 +165,7 @@ function AdminDashboard({ session }) {
     <main className="admin-shell">
       <div className="admin-dashboard">
         <header className="admin-topbar">
-          <div><div className="kicker">Chammanoor control room</div><h1>Admin dashboard</h1></div>
+          <div><div className="kicker">Chammanur control room</div><h1>Admin dashboard</h1></div>
           <button className="admin-logout" type="button" onClick={signOut}>Sign out</button>
         </header>
         <section className="admin-stat-grid">
@@ -178,7 +177,8 @@ function AdminDashboard({ session }) {
           {[
             ['overview', 'Overview'],
             ['settings', 'Homepage'],
-            ['directory', 'Directory'],
+            ['directory', 'Places'],
+            ['people', 'People'],
             ['town', 'Town content'],
             ['buses', 'Bus timings'],
             ['access', 'Access'],
@@ -192,10 +192,11 @@ function AdminDashboard({ session }) {
         {activeSection === 'overview' && <section className="admin-panel admin-welcome">
           <div className="kicker">Quick start</div>
           <h2>What would you like to update?</h2>
-          <p className="admin-muted">Choose a section above to manage the public Chammanoor website without editing code.</p>
+          <p className="admin-muted">Choose a section above to manage the public Chammanur website without editing code.</p>
           <div className="admin-quick-grid">
-            <button type="button" onClick={() => setActiveSection('settings')}><strong>Homepage</strong><span>Hero image and copy</span></button>
-            <button type="button" onClick={() => setActiveSection('directory')}><strong>Directory</strong><span>Local listings and contacts</span></button>
+            <button type="button" onClick={() => setActiveSection('settings')}><strong>Homepage</strong><span>Hero and About details</span></button>
+            <button type="button" onClick={() => setActiveSection('directory')}><strong>Places</strong><span>Manage local places and services</span></button>
+            <button type="button" onClick={() => setActiveSection('people')}><strong>People</strong><span>Manage public representatives</span></button>
             <button type="button" onClick={() => setActiveSection('town')}><strong>Town content</strong><span>Landmarks, notices and events</span></button>
             <button type="button" onClick={() => setActiveSection('buses')}><strong>Bus timings</strong><span>Routes and departure schedules</span></button>
             <button type="button" onClick={() => setActiveSection('access')}><strong>Access</strong><span>Approve administrator requests</span></button>
@@ -217,7 +218,7 @@ function AdminDashboard({ session }) {
             </div>
           )}
         </section>}
-        {['settings', 'directory', 'town', 'buses'].includes(activeSection) && <ContentAdmin session={session} section={activeSection} />}
+        {['settings', 'directory', 'people', 'town', 'buses'].includes(activeSection) && <ContentAdmin session={session} section={activeSection} />}
         <p className="admin-muted admin-note">Changes are stored in Supabase and become available to public visitors when published.</p>
       </div>
     </main>
@@ -250,7 +251,7 @@ export default function AdminPage() {
   }, []);
 
   if (!supabaseConfigured) {
-    return <main className="admin-shell"><div className="admin-auth-card"><div className="kicker">Supabase setup needed</div><h1>Connect the control room.</h1><p className="admin-muted">Create a <code>.env.local</code> file from <code>.env.example</code>, add your Supabase URL and anon key, then restart Vite.</p><a className="primary" href="#top">Return to site</a></div></main>;
+    return <main className="admin-shell"><div className="admin-auth-card"><div className="kicker">Supabase setup needed</div><h1>Connect the control room.</h1><p className="admin-muted">Create a <code>.env.local</code> file from <code>.env.example</code>, add your Supabase URL and anon key, then restart Vite.</p><a className="button button-primary" href="#top">Return to site</a></div></main>;
   }
   if (loading) return <main className="admin-shell"><div className="admin-auth-card"><p className="admin-muted">Checking your session…</p></div></main>;
   if (accessDenied) {

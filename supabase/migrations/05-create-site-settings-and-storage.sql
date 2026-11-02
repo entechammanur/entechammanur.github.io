@@ -20,9 +20,9 @@ create policy "Admins can manage site settings"
 insert into public.entechemmanur_site_settings (key, value)
 values
   ('hero_image_url', 'https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=2200&q=85'),
-  ('hero_eyebrow', 'A living map of Kerala · 10°40′N 76°02′E'),
-  ('hero_title', 'Find your way back home.'),
-  ('hero_description', 'A new way to experience Chammanoor — its green roads, familiar landmarks and the people who make this place feel like home.')
+  ('hero_eyebrow', '10°40′N 76°02′E'),
+  ('hero_title', 'ചമ്മനൂർ പുന്നയൂർക്കുളം·'),
+  ('hero_description', 'A new way to experience Chammanur — its green roads, familiar landmarks and the people who make this place feel like home.')
 on conflict (key) do nothing;
 
 insert into storage.buckets (id, name, public)

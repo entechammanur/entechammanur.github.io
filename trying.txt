@@ -1,6 +1,7 @@
 git add .
 git commit -m ""
-git push origin main
+git push origin hallmark
 
 npm run build
+npm run deploy
 

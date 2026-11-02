@@ -1,0 +1,44 @@
+{
+  "project": "Chammanur public town guide",
+  "genre": "editorial",
+  "material": {
+    "real": [
+      "The Chammanur name and the user's stated audience",
+      "The supplied aerial town photograph",
+      "Owner-supplied landmark coordinates already in the app",
+      "Existing editable About settings"
+    ],
+    "pictures": [
+      "The supplied aerial photograph leads the public homepage",
+      "Optional representative and local-place photos are supplied by administrators"
+    ],
+    "absent": [
+      "No representative names, portraits, or contact details have been supplied",
+      "No new bus schedules, events, or notices have been supplied"
+    ]
+  },
+  "preserve": [
+    "The #admin route and current Supabase authentication",
+    "Existing migrations and the user's in-progress About settings",
+    "The verified fallback map coordinates and search/filter behavior"
+  ],
+  "introduce": [
+    "A practical, searchable public information layout",
+    "Optional public representative profiles with admin-uploaded photos and contacts",
+    "Published notices and events on the public homepage",
+    "Empty states instead of fabricated directory and bus fallback content"
+  ],
+  "touchPlan": [
+    "App.jsx",
+    "styles.css",
+    "tokens.css",
+    "base.css",
+    "index.html",
+    "components/GlassHeader.jsx",
+    "components/TownMap.jsx",
+    "AdminPage.jsx",
+    "ContentAdmin.jsx",
+    "supabase/migrations/10-add-directory-photos.sql",
+    "README.md"
+  ]
+}

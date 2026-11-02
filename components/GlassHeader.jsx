@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 
-const navigation = [
-  ['The journey', '#journey'],
-  ['Directory', '#directory'],
-  ['Bus timings', '#bus-timings'],
-  ['Stories', '#stories'],
-  ['Contribute', '#contact'],
-];
-
-export default function GlassHeader() {
+export default function GlassHeader({ hasPeople, hasUpdates, hasNotices }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigation = [
+    ['Directory', '#directory'],
+    ['Landmarks', '#places'],
+    ...(hasPeople ? [['People', '#people']] : []),
+    ['Transport', '#bus-timings'],
+    ...(hasNotices ? [['Notices', '#notices']] : []),
+    ...(hasUpdates ? [['Events', '#updates']] : []),
+    ['About', '#about'],
+  ];
 
   useEffect(() => {
     if (!menuOpen) return undefined;
-
     const closeOnEscape = (event) => {
       if (event.key === 'Escape') setMenuOpen(false);
     };
@@ -26,69 +25,46 @@ export default function GlassHeader() {
 
   return (
     <>
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.button
-            className="mobile-nav-backdrop"
-            type="button"
-            aria-label="Close navigation"
-            onClick={closeMenu}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          />
-        )}
-      </AnimatePresence>
-
-      <div className="glass-header">
-        <div className="glass-header-inner">
-          <a className="brand" href="#top" onClick={closeMenu} aria-label="Chammanur home">
-            CHAMMAN<span>U</span>R<span>.</span>
-          </a>
-
+      {menuOpen && (
+        <button
+          className="mobile-nav-backdrop"
+          type="button"
+          aria-label="Close navigation"
+          onClick={closeMenu}
+        />
+      )}
+      <header className="site-header">
+        <div className="site-header-inner">
+          <a className="brand" href="#top" onClick={closeMenu}>Chammanur</a>
           <nav className="navlinks" aria-label="Main navigation">
             {navigation.map(([label, href]) => <a key={href} href={href}>{label}</a>)}
           </nav>
-
-          <a className="header-cta" href="#journey">Explore town <span aria-hidden="true">↗</span></a>
-
-          <motion.button
+          <a className="header-cta" href="#directory">Find information</a>
+          <button
             className="menu"
             type="button"
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
             aria-controls="mobile-navigation"
             onClick={() => setMenuOpen((isOpen) => !isOpen)}
-            whileTap={{ scale: 0.94 }}
           >
-            <span className={`menu-icon ${menuOpen ? 'is-open' : ''}`} aria-hidden="true">
+            <span className={`menu-icon${menuOpen ? ' is-open' : ''}`} aria-hidden="true">
               <span />
               <span />
             </span>
-          </motion.button>
-
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.nav
-                className="mobile-nav"
-                id="mobile-navigation"
-                aria-label="Mobile navigation"
-                initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-              >
-                {navigation.map(([label, href], index) => (
-                  <a key={href} href={href} onClick={closeMenu}>
-                    <span>{label}</span>
-                    <small>{String(index + 1).padStart(2, '0')}</small>
-                  </a>
-                ))}
-              </motion.nav>
-            )}
-          </AnimatePresence>
+          </button>
+          <nav
+            className="mobile-nav"
+            id="mobile-navigation"
+            aria-label="Mobile navigation"
+            hidden={!menuOpen}
+          >
+            {navigation.map(([label, href]) => (
+              <a key={href} href={href} onClick={closeMenu}>{label}</a>
+            ))}
+          </nav>
         </div>
-      </div>
+      </header>
     </>
   );
 }
