@@ -74,6 +74,7 @@ npm run preview -- --host
 - The homepage uses the supplied aerial photograph and lets administrators replace it.
 - Published directory entries power the searchable places and representatives sections. Add places under Admin → Places; add representatives separately under Admin → People. The People form saves records in the existing `Leadership` category for compatibility.
 - Directory records support phone, WhatsApp, coordinates, and an optional portrait. Admins can upload a portrait to Supabase Storage or provide a hosted photo URL.
+- Bus schedules are entered with separate hour, minute, and AM/PM selectors; admins can set the bus name, route, final stop, destination group, optional contact number, and daily or selected operating days. The destination group controls which side-by-side public schedule heading the bus appears under; admins can reuse an existing group or enter a new one. Apply migrations 11 and 12 in Supabase before saving these fields.
 - Published landmarks appear on the interactive map. Notices and upcoming events appear only when administrators publish them. Bus schedules show published records only.
 - Unpublished records and missing data are not replaced with sample listings, people, or schedules.
 - The about section uses editable homepage settings. The map fallback includes only the owner-supplied landmark coordinates described below.
@@ -105,6 +106,7 @@ Update the About text under Admin → Homepage. Manage places under Admin → Pl
    supabase/migrations/08-add-bus-name.sql
    supabase/migrations/09-add-about-section-settings.sql
    supabase/migrations/10-add-directory-photos.sql
+   supabase/migrations/11-add-bus-details.sql
    ```
 
    Run `04-promote-admin-by-email.sql` separately only when promoting a real account, after replacing its email.

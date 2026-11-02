@@ -7,13 +7,63 @@ const blankListing = {
   name: '', category: '', description: '', address: '', phone: '', whatsapp: '',
   photo_url: '', latitude: '', longitude: '', is_published: false,
 };
+const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const createBlankBusDraft = () => ({
+  bus_name: '',
+  departure_hour: '',
+  departure_minute: '00',
+  departure_period: 'AM',
+  route_name: '',
+  last_stop: '',
+  route_group: '',
+  contact_number: '',
+  is_daily: true,
+  selected_days: [],
+  is_published: false,
+});
 const representativeCategories = ['leadership', 'representative', 'ward member', 'panchayat'];
 const resourceConfig = {
   landmarks: { table: 'entechemmanur_landmarks', fields: ['name', 'description', 'stop_label', 'location_input', 'route_order', 'is_map_highlighted', 'is_published'] },
   notices: { table: 'entechemmanur_notices', fields: ['title', 'body', 'severity', 'is_published'] },
   events: { table: 'entechemmanur_events', fields: ['title', 'description', 'starts_at', 'ends_at', 'venue', 'is_published'] },
-  buses: { table: 'entechemmanur_bus_timings', fields: ['bus_name', 'route_name', 'direction', 'departure_time', 'arrival_time', 'via', 'operating_days', 'is_published'] },
+  buses: { table: 'entechemmanur_bus_timings', fields: [] },
 };
+
+function getBusTimeParts(value = '') {
+  const [hourPart = '', minutePart = '00'] = String(value).split(':');
+  const hour24 = Number(hourPart);
+  if (!Number.isInteger(hour24) || hour24 < 0 || hour24 > 23) {
+    return { departure_hour: '', departure_minute: '00', departure_period: 'AM' };
+  }
+  return {
+    departure_hour: String(hour24 % 12 || 12),
+    departure_minute: String(Number(minutePart) || 0).padStart(2, '0'),
+    departure_period: hour24 >= 12 ? 'PM' : 'AM',
+  };
+}
+
+function formatBusTimeLabel(value = '') {
+  const [hourPart = '', minutePart = '00'] = String(value).split(':');
+  const hour24 = Number(hourPart);
+  if (!Number.isInteger(hour24) || hour24 < 0 || hour24 > 23) return value || 'Time unavailable';
+  return `${hour24 % 12 || 12}:${String(Number(minutePart) || 0).padStart(2, '0')} ${hour24 >= 12 ? 'PM' : 'AM'}`;
+}
+
+function getBusDayParts(value = '') {
+  const days = String(value).trim();
+  if (!days || /^daily$/i.test(days)) return { is_daily: true, selected_days: [] };
+  if (/^(weekdays|monday\s*-\s*friday|mon\s*-\s*fri)$/i.test(days)) {
+    return { is_daily: false, selected_days: weekdays.slice(0, 5) };
+  }
+  if (/^(weekends|saturday\s*-\s*sunday|sat\s*-\s*sun)$/i.test(days)) {
+    return { is_daily: false, selected_days: weekdays.slice(5) };
+  }
+  const normalizedDays = new Set(days.split(/[,;|]/).map((day) => day.trim().slice(0, 3).toLowerCase()));
+  return {
+    is_daily: false,
+    selected_days: weekdays.filter((day) => normalizedDays.has(day.slice(0, 3).toLowerCase())),
+  };
+}
 
 function isRepresentative(entry) {
   const category = String(entry.category || '').toLowerCase();
@@ -27,7 +77,7 @@ export default function ContentAdmin({ session, section = 'settings' }) {
   const [editingListingId, setEditingListingId] = useState(null);
   const [resourceRows, setResourceRows] = useState({});
   const [resource, setResource] = useState(section === 'buses' ? 'buses' : 'landmarks');
-  const [resourceDraft, setResourceDraft] = useState({});
+  const [resourceDraft, setResourceDraft] = useState(section === 'buses' ? createBlankBusDraft() : {});
   const [editingResourceId, setEditingResourceId] = useState(null);
   const [setting, setSetting] = useState({ key: '', value: '' });
   const [listing, setListing] = useState(blankListing);
@@ -41,6 +91,11 @@ export default function ContentAdmin({ session, section = 'settings' }) {
     if (section === 'buses') setResource('buses');
     if (section === 'town' && resource === 'buses') setResource('landmarks');
   }, [section, resource]);
+
+  useEffect(() => {
+    setResourceDraft(section === 'buses' ? createBlankBusDraft() : {});
+    setEditingResourceId(null);
+  }, [section]);
 
   useEffect(() => {
     setListing(blankListing);
@@ -213,8 +268,10 @@ export default function ContentAdmin({ session, section = 'settings' }) {
 
   const addResource = async (event) => {
     event.preventDefault();
+    setError('');
+    setStatus('');
     const config = resourceConfig[resource];
-    const payload = { ...resourceDraft, created_by: session.user.id };
+    let payload = { ...resourceDraft, created_by: session.user.id };
     if (resource === 'landmarks') {
       const parsed = parseLocationInput(payload.location_input || '');
       if (!parsed.coordinates) {
@@ -225,6 +282,40 @@ export default function ContentAdmin({ session, section = 'settings' }) {
       payload.longitude = parsed.coordinates.longitude;
       payload.location_type = parsed.type;
     }
+    if (resource === 'buses') {
+      if (!resourceDraft.is_daily && !(resourceDraft.selected_days || []).length) {
+        setError('Choose Daily or select at least one operating day.');
+        return;
+      }
+
+      const selectedHour = Number(resourceDraft.departure_hour);
+      if (!Number.isInteger(selectedHour) || selectedHour < 1 || selectedHour > 12) {
+        setError('Choose a valid bus departure hour.');
+        return;
+      }
+      const hour24 = (selectedHour % 12) + (resourceDraft.departure_period === 'PM' ? 12 : 0);
+      const departureTime = `${String(hour24).padStart(2, '0')}:${String(resourceDraft.departure_minute || '00').padStart(2, '0')}:00`;
+      const lastStop = String(resourceDraft.last_stop || '').trim();
+      const routeGroup = String(resourceDraft.route_group || '').trim();
+      if (!routeGroup) {
+        setError('Choose a destination group for this bus schedule.');
+        return;
+      }
+      payload = {
+        bus_name: String(resourceDraft.bus_name || '').trim(),
+        route_name: String(resourceDraft.route_name || '').trim(),
+        last_stop: lastStop,
+        route_group: routeGroup,
+        contact_number: String(resourceDraft.contact_number || '').trim() || null,
+        departure_time: departureTime,
+        arrival_time: null,
+        via: null,
+        operating_days: resourceDraft.is_daily ? 'Daily' : weekdays.filter((day) => resourceDraft.selected_days.includes(day)).join(', '),
+        is_published: Boolean(resourceDraft.is_published),
+        direction: lastStop,
+        created_by: session.user.id,
+      };
+    }
     ['latitude', 'longitude', 'route_order'].forEach((field) => {
       if (payload[field]) payload[field] = Number(payload[field]);
     });
@@ -232,8 +323,19 @@ export default function ContentAdmin({ session, section = 'settings' }) {
       ? supabase.from(config.table).update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingResourceId)
       : supabase.from(config.table).insert(payload);
     const { error: insertError } = await request;
-    if (insertError) setError(insertError.message);
-    else { setStatus(`${resource} entry ${editingResourceId ? 'updated' : 'added'}.`); setResourceDraft({}); setEditingResourceId(null); load(); }
+    if (insertError) {
+      const missingBusColumns = resource === 'buses'
+        && ['42703', 'PGRST204'].includes(insertError.code)
+        && /last_stop|contact_number|route_group/.test(insertError.message || '');
+      setError(missingBusColumns
+        ? 'Apply migrations 11-add-bus-details.sql and 12-add-bus-route-groups.sql in Supabase before saving bus schedule details.'
+        : insertError.message);
+    } else {
+      setStatus(`${resource} entry ${editingResourceId ? 'updated' : 'added'}.`);
+      setResourceDraft(resource === 'buses' ? createBlankBusDraft() : {});
+      setEditingResourceId(null);
+      load();
+    }
   };
 
   const deleteResource = async (id) => {
@@ -245,6 +347,22 @@ export default function ContentAdmin({ session, section = 'settings' }) {
   const editResource = (item) => {
     const draft = { ...item };
     ['created_at', 'updated_at', 'created_by', 'id'].forEach((key) => delete draft[key]);
+    if (resource === 'buses') {
+      const dayParts = getBusDayParts(item.operating_days);
+      setResourceDraft({
+        ...createBlankBusDraft(),
+        ...getBusTimeParts(item.departure_time),
+        bus_name: item.bus_name || '',
+        route_name: item.route_name || '',
+        last_stop: item.last_stop || item.direction || '',
+        route_group: item.route_group || item.last_stop || item.direction || '',
+        contact_number: item.contact_number || '',
+        ...dayParts,
+        is_published: Boolean(item.is_published),
+      });
+      setEditingResourceId(item.id);
+      return;
+    }
     if (resource === 'landmarks' && !draft.location_input && draft.latitude != null && draft.longitude != null) {
       draft.location_input = `${draft.latitude}, ${draft.longitude}`;
     }
@@ -309,15 +427,77 @@ export default function ContentAdmin({ session, section = 'settings' }) {
           {parsedLocation?.type === 'short_google_maps_link' && <span className="location-help-error">Short Google Maps links cannot be resolved here. Open the place in Google Maps, copy its latitude and longitude, and paste them as “latitude, longitude”.</span>}
           {parsedLocation && !parsedLocation.coordinates && parsedLocation.type !== 'empty' && parsedLocation.type !== 'short_google_maps_link' && <span className="location-help-error">No coordinates were found. Use a full Google Maps link containing coordinates, a latitude/longitude pair, or a full Plus Code.</span>}
         </div>}
-        <form className="admin-form" onSubmit={addResource}>
-          {resourceConfig[resource].fields.map((field) => field === 'is_published' || field === 'is_map_highlighted'
-            ? <label className="admin-check" key={field}><input type="checkbox" checked={Boolean(resourceDraft[field])} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.checked })} /> {field === 'is_map_highlighted' ? 'Highlight on the map' : 'Published'}</label>
-            : <label className="admin-field" key={field}><span>{field === 'location_input' ? 'Location (latitude, longitude)' : field === 'stop_label' ? 'Map label' : field === 'bus_name' ? 'Bus name' : field.replaceAll('_', ' ')}</span>{field === 'body' || field === 'description' ? <textarea required={field === 'name' || field === 'title'} rows="3" value={resourceDraft[field] ?? ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} /> : <input required={field === 'name' || field === 'title' || (resource === 'buses' && field === 'bus_name') || (resource === 'landmarks' && field === 'location_input')} placeholder={field === 'location_input' ? '10.67085, 76.00207 or paste a full Google Maps link' : field === 'stop_label' ? 'Example: MAIN JUNCTION or STOP 04' : field === 'bus_name' ? 'Enter the bus or service name' : undefined} type={field.includes('_at') ? 'datetime-local' : ['latitude', 'longitude', 'route_order'].includes(field) ? 'number' : 'text'} step={field === 'route_order' ? '1' : 'any'} value={resourceDraft[field] ?? ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} />}</label>
-          )}
-          <button className="admin-submit" type="submit">{editingResourceId ? `Save ${resource}` : `Add ${resource}`}</button>
-          {editingResourceId && <button className="admin-switch" type="button" onClick={() => { setResourceDraft({}); setEditingResourceId(null); }}>Cancel edit</button>}
-        </form>
-        <div className="request-list admin-content-list">{(resourceRows[resource] || []).map((item) => <div className="request-row" key={item.id}><div><strong>{item.name || item.title || item.route_name}</strong><span>{item.description || item.body || item.venue || (item.direction ? `${item.direction} · ${item.departure_time}` : '')}</span></div><span className="request-status">{item.is_published ? 'published' : 'draft'}</span><button className="admin-refresh" type="button" onClick={() => editResource(item)}>Edit</button><button className="admin-delete" type="button" onClick={() => deleteResource(item.id)}>Delete</button></div>)}</div>
+        {resource === 'buses' ? (
+          <form className="admin-form" onSubmit={addResource}>
+            <label className="admin-field">
+              <span>Bus name</span>
+              <input required value={resourceDraft.bus_name || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, bus_name: event.target.value })} />
+            </label>
+            <fieldset className="admin-field bus-time-field">
+              <legend>Departure time</legend>
+              <div className="bus-time-selects">
+                <label className="admin-field"><span>Hour</span><select required aria-label="Departure hour" value={resourceDraft.departure_hour || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, departure_hour: event.target.value })}><option value="" disabled>Select</option>{Array.from({ length: 12 }, (_, index) => String(index + 1)).map((hour) => <option key={hour} value={hour}>{hour}</option>)}</select></label>
+                <label className="admin-field"><span>Minute</span><select required aria-label="Departure minute" value={resourceDraft.departure_minute ?? '00'} onChange={(event) => setResourceDraft({ ...resourceDraft, departure_minute: event.target.value })}>{Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map((minute) => <option key={minute} value={minute}>{minute}</option>)}</select></label>
+                <label className="admin-field"><span>AM / PM</span><select aria-label="Departure AM or PM" value={resourceDraft.departure_period || 'AM'} onChange={(event) => setResourceDraft({ ...resourceDraft, departure_period: event.target.value })}><option value="AM">AM</option><option value="PM">PM</option></select></label>
+              </div>
+            </fieldset>
+            <label className="admin-field">
+              <span>Route</span>
+              <input required value={resourceDraft.route_name || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, route_name: event.target.value })} />
+            </label>
+            <label className="admin-field">
+              <span>Last stop</span>
+              <input required value={resourceDraft.last_stop || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, last_stop: event.target.value })} />
+            </label>
+            <label className="admin-field">
+              <span>Destination group</span>
+              <input required list="bus-route-groups" value={resourceDraft.route_group || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, route_group: event.target.value })} placeholder="For example: Kunnamkulam" />
+              <datalist id="bus-route-groups">{Array.from(new Set((resourceRows.buses || []).map((bus) => String(bus.route_group || bus.last_stop || bus.direction || '').trim()).filter(Boolean))).map((group) => <option key={group} value={group} />)}</datalist>
+              <span className="admin-muted">Sets the side-by-side schedule heading. Reuse a group name to keep buses together.</span>
+            </label>
+            <label className="admin-field">
+              <span>Contact number (optional)</span>
+              <input type="tel" autoComplete="tel" value={resourceDraft.contact_number || ''} onChange={(event) => setResourceDraft({ ...resourceDraft, contact_number: event.target.value })} />
+            </label>
+            <fieldset className="admin-days">
+              <legend>Operating days</legend>
+              <div className="admin-weekdays">
+                <label className="admin-check"><input type="checkbox" checked={Boolean(resourceDraft.is_daily)} onChange={(event) => setResourceDraft({ ...resourceDraft, is_daily: event.target.checked, selected_days: event.target.checked ? [] : resourceDraft.selected_days || [] })} /> Daily</label>
+                {weekdays.map((day) => <label className="admin-check" key={day}><input type="checkbox" checked={(resourceDraft.selected_days || []).includes(day)} disabled={Boolean(resourceDraft.is_daily)} onChange={(event) => {
+                  const selectedDays = resourceDraft.selected_days || [];
+                  setResourceDraft({
+                    ...resourceDraft,
+                    is_daily: false,
+                    selected_days: event.target.checked
+                      ? [...selectedDays, day]
+                      : selectedDays.filter((selectedDay) => selectedDay !== day),
+                  });
+                }} /> {day}</label>)}
+              </div>
+            </fieldset>
+            <label className="admin-check"><input type="checkbox" checked={Boolean(resourceDraft.is_published)} onChange={(event) => setResourceDraft({ ...resourceDraft, is_published: event.target.checked })} /> Published</label>
+            <button className="admin-submit" type="submit">{editingResourceId ? 'Save bus schedule' : 'Add bus schedule'}</button>
+            {editingResourceId && <button className="admin-switch" type="button" onClick={() => { setResourceDraft(createBlankBusDraft()); setEditingResourceId(null); }}>Cancel edit</button>}
+          </form>
+        ) : (
+          <form className="admin-form" onSubmit={addResource}>
+            {resourceConfig[resource].fields.map((field) => field === 'is_published' || field === 'is_map_highlighted'
+              ? <label className="admin-check" key={field}><input type="checkbox" checked={Boolean(resourceDraft[field])} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.checked })} /> {field === 'is_map_highlighted' ? 'Highlight on the map' : 'Published'}</label>
+              : <label className="admin-field" key={field}><span>{field === 'location_input' ? 'Location (latitude, longitude)' : field === 'stop_label' ? 'Map label' : field.replaceAll('_', ' ')}</span>{field === 'body' || field === 'description' ? <textarea required={field === 'name' || field === 'title'} rows="3" value={resourceDraft[field] ?? ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} /> : <input required={field === 'name' || field === 'title' || (resource === 'landmarks' && field === 'location_input')} placeholder={field === 'location_input' ? '10.67085, 76.00207 or paste a full Google Maps link' : field === 'stop_label' ? 'Example: MAIN JUNCTION or STOP 04' : undefined} type={field.includes('_at') ? 'datetime-local' : ['latitude', 'longitude', 'route_order'].includes(field) ? 'number' : 'text'} step={field === 'route_order' ? '1' : 'any'} value={resourceDraft[field] ?? ''} onChange={(event) => setResourceDraft({ ...resourceDraft, [field]: event.target.value })} />}</label>
+            )}
+            <button className="admin-submit" type="submit">{editingResourceId ? `Save ${resource}` : `Add ${resource}`}</button>
+            {editingResourceId && <button className="admin-switch" type="button" onClick={() => { setResourceDraft({}); setEditingResourceId(null); }}>Cancel edit</button>}
+          </form>
+        )}
+        <div className="request-list admin-content-list">
+          {(resourceRows[resource] || []).map((item) => {
+            const title = resource === 'buses' ? item.bus_name || item.route_name : item.name || item.title || item.route_name;
+            const summary = resource === 'buses'
+              ? [item.route_name, (item.route_group || item.last_stop || item.direction) && `Group: ${item.route_group || item.last_stop || item.direction}`, item.last_stop || item.direction, formatBusTimeLabel(item.departure_time), item.operating_days, item.contact_number].filter(Boolean).join(' · ')
+              : item.description || item.body || item.venue || '';
+            return <div className="request-row" key={item.id}><div><strong>{title}</strong><span>{summary}</span></div><span className="request-status">{item.is_published ? 'published' : 'draft'}</span><button className="admin-refresh" type="button" onClick={() => editResource(item)}>Edit</button><button className="admin-delete" type="button" onClick={() => deleteResource(item.id)}>Delete</button></div>;
+          })}
+        </div>
       </section>}
 
       {(section === 'directory' || section === 'people') && <section className="admin-panel">

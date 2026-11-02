@@ -63,6 +63,16 @@ function formatDate(value, options = { dateStyle: 'medium' }) {
   return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, options).format(date);
 }
 
+function formatBusTime(value) {
+  if (!value) return 'Time unavailable';
+  const [hourPart, minutePart = '00'] = String(value).split(':');
+  const hour24 = Number(hourPart);
+  if (!Number.isInteger(hour24) || hour24 < 0 || hour24 > 23) return String(value);
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(Number(minutePart) || 0).padStart(2, '0')} ${period}`;
+}
+
 function DirectoryRecord({ entry, person = false }) {
   const phone = String(entry.phone || '').replace(/[^\d+*#,;]/g, '');
   const whatsapp = String(entry.whatsapp || '').replace(/\D/g, '');
@@ -124,15 +134,16 @@ function PublicSite() {
         const results = await Promise.all([
           supabase.from('entechemmanur_site_settings').select('key, value'),
           supabase.from('entechemmanur_directory_listings').select('id, category, name, description, phone, whatsapp, address, latitude, longitude, photo_url').eq('is_published', true).order('created_at', { ascending: false }),
-          supabase.from('entechemmanur_bus_timings').select('bus_name, route_name, direction, departure_time, arrival_time, via, operating_days').eq('is_published', true).order('departure_time'),
+          supabase.from('entechemmanur_bus_timings').select('id, bus_name, route_name, direction, departure_time, arrival_time, via, operating_days, last_stop, contact_number, route_group').eq('is_published', true).order('departure_time'),
           supabase.from('entechemmanur_landmarks').select('id, name, description, stop_label, latitude, longitude, route_order, is_map_highlighted').eq('is_published', true).order('route_order').order('created_at'),
           supabase.from('entechemmanur_notices').select('id, title, body, severity, published_until').eq('is_published', true).order('created_at', { ascending: false }),
           supabase.from('entechemmanur_events').select('id, title, description, starts_at, ends_at, venue').eq('is_published', true).order('starts_at'),
         ]);
         if (!isActive) return;
 
-        const [settingsResult, initialListingsResult, busResult, landmarksResult, noticesResult, eventsResult] = results;
+        const [settingsResult, initialListingsResult, initialBusResult, landmarksResult, noticesResult, eventsResult] = results;
         let listingsResult = initialListingsResult;
+        let busResult = initialBusResult;
         let photoMigrationMissing = false;
         if (
           listingsResult.error?.code === '42703'
@@ -144,6 +155,20 @@ function PublicSite() {
             .eq('is_published', true)
             .order('created_at', { ascending: false });
           photoMigrationMissing = !listingsResult.error;
+        }
+        let busDetailsMigrationMissing = false;
+        let busRouteGroupsMigrationMissing = false;
+        if (
+          ['42703', 'PGRST204'].includes(busResult.error?.code)
+          && /last_stop|contact_number|route_group/.test(busResult.error.message || '')
+        ) {
+          busDetailsMigrationMissing = /last_stop|contact_number/.test(busResult.error.message || '');
+          busRouteGroupsMigrationMissing = /route_group/.test(busResult.error.message || '');
+          busResult = await supabase
+            .from('entechemmanur_bus_timings')
+            .select('id, bus_name, route_name, direction, departure_time, arrival_time, via, operating_days')
+            .eq('is_published', true)
+            .order('departure_time');
         }
         if (!isActive) return;
 
@@ -177,6 +202,12 @@ function PublicSite() {
         const warnings = [];
         if (photoMigrationMissing) {
           warnings.push('Directory listings are available, but profile photos need database migration 10.');
+        }
+        if (busDetailsMigrationMissing) {
+          warnings.push('Bus schedules are available, but last stops and contact numbers need database migration 11.');
+        }
+        if (busRouteGroupsMigrationMissing) {
+          warnings.push('Bus destination groups need database migration 12.');
         }
         if (queryErrors.length) {
           console.error('Some Chammanur public information could not be refreshed.', queryErrors);
@@ -222,6 +253,9 @@ function PublicSite() {
     searchTerm,
     bus.bus_name,
     bus.route_name,
+    bus.route_group,
+    bus.last_stop,
+    bus.contact_number,
     bus.direction,
     bus.via,
     bus.operating_days,
@@ -229,6 +263,12 @@ function PublicSite() {
   ));
   const filteredNotices = notices.filter((notice) => matchesSearch(searchTerm, notice.title, notice.body, notice.severity));
   const filteredEvents = events.filter((event) => matchesSearch(searchTerm, event.title, event.description, event.venue));
+  const busGroups = Array.from(filteredBusTimings.reduce((groups, bus) => {
+    const routeGroup = String(bus.route_group || bus.last_stop || bus.direction || 'Other destinations').trim();
+    if (!groups.has(routeGroup)) groups.set(routeGroup, { routeGroup, buses: [] });
+    groups.get(routeGroup).buses.push(bus);
+    return groups;
+  }, new Map()).values());
 
   const people = filteredEntries.filter(isLeadershipEntry);
   const places = filteredEntries.filter((entry) => !isLeadershipEntry(entry));
@@ -253,8 +293,9 @@ function PublicSite() {
       <header className="hero" id="top">
         <div className="container hero-layout">
           <div className="hero-copy">
-            <h1>{siteSettings.hero_title || 'A guide to Chammanur.'}</h1>
-            <p>{siteSettings.hero_description || 'Find local places, public representatives, services and travel information.'}</p>
+            <p className="hero-eyebrow">{siteSettings.hero_eyebrow || 'Chammanur, Punnayurkulam, Kerala'}</p>
+            <h1>{siteSettings.hero_title || 'Chammanur.'}</h1>
+            <p>{siteSettings.hero_description || 'Punnayurkulam, Kerala.'}</p>
             <div className="hero-actions">
               <a className="button button-primary" href="#directory">Find information</a>
               <a className="button button-secondary" href="#places">Explore the map</a>
@@ -411,17 +452,25 @@ function PublicSite() {
             ) : filteredBusTimings.length === 0 ? (
               <p className="empty-line">No bus schedules match this search.</p>
             ) : (
-              <div className="bus-list">
-                {filteredBusTimings.map((bus) => (
-                  <article className="bus-row" key={`${bus.route_name}-${bus.departure_time}`}>
-                    <time className="bus-time">{bus.departure_time?.slice(0, 5) || '—'}</time>
-                    <div className="bus-route">
-                      <h3>{bus.route_name}</h3>
-                      <p>{[bus.direction, bus.via, bus.operating_days].filter(Boolean).join(' · ')}</p>
-                      {bus.bus_name && <p>{bus.bus_name}</p>}
+              <div className="bus-groups">
+                {busGroups.map((group, index) => (
+                  <section className="bus-group" key={group.routeGroup} aria-labelledby={`bus-group-${index}`}>
+                    <h3 id={`bus-group-${index}`}>To {group.routeGroup} side</h3>
+                    <div className="bus-list">
+                      {group.buses.map((bus) => (
+                        <article className="bus-row" key={bus.id || `${bus.route_name}-${bus.departure_time}-${bus.bus_name}`}>
+                          <time className="bus-time" dateTime={bus.departure_time}>{formatBusTime(bus.departure_time)}</time>
+                          <div className="bus-route">
+                            <h4>{bus.bus_name || bus.route_name}</h4>
+                            <p>Route: {bus.route_name}</p>
+                            <p>Last stop: {bus.last_stop || bus.direction || 'Not specified'}</p>
+                            <p>{[bus.operating_days || 'Daily', bus.via].filter(Boolean).join(' · ')}</p>
+                          </div>
+                          {bus.contact_number && <a className="bus-contact" href={`tel:${String(bus.contact_number).replace(/[^\d+*#,;]/g, '')}`}>Call {bus.contact_number}</a>}
+                        </article>
+                      ))}
                     </div>
-                    {bus.arrival_time && <p className="bus-arrival">Arrival {bus.arrival_time.slice(0, 5)}</p>}
-                  </article>
+                  </section>
                 ))}
               </div>
             )}

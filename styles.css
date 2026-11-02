@@ -173,6 +173,13 @@ a {
   padding-block: var(--space-xl);
 }
 
+.hero-eyebrow {
+  margin-bottom: var(--space-md);
+  color: var(--color-accent-soft-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
 .hero h1 {
   max-width: 9ch;
   margin-bottom: var(--space-lg);
@@ -668,6 +675,23 @@ a {
   border-top: 2px solid var(--color-ink);
 }
 
+.bus-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-2xl);
+}
+
+.bus-group {
+  min-width: 0;
+  border-top: 2px solid var(--color-ink);
+}
+
+.bus-group > h3 {
+  margin-block: var(--space-lg);
+  font-size: var(--text-title);
+}
+
 .bus-row,
 .event-row,
 .notice-row {
@@ -691,6 +715,19 @@ a {
 .event-row p {
   margin-top: var(--space-xs);
   color: var(--color-ink-2);
+}
+
+.bus-row h4 {
+  margin: 0;
+  font-size: var(--text-lg);
+  overflow-wrap: break-word;
+}
+
+.bus-contact {
+  justify-self: start;
+  color: var(--color-accent-soft-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .bus-arrival,
@@ -960,6 +997,15 @@ a {
     gap: var(--space-xs);
   }
 
+  .bus-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-md);
+  }
+
+  .bus-group > h3 {
+    overflow-wrap: break-word;
+  }
+
   .map-stage,
   .leaflet-town-map {
     min-height: 360px;
@@ -1050,6 +1096,7 @@ a {
 
 .admin-field input,
 .admin-field textarea,
+.admin-field select,
 .admin-select {
   width: 100%;
   min-height: 44px;
@@ -1069,8 +1116,43 @@ a {
 
 .admin-field input:focus-visible,
 .admin-field textarea:focus-visible,
+.admin-field select:focus-visible,
 .admin-select:focus-visible {
   outline-color: var(--color-focus);
+}
+
+.bus-time-field,
+.admin-days {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.bus-time-field legend,
+.admin-days legend {
+  margin-bottom: var(--space-xs);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.bus-time-selects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.admin-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-lg);
+}
+
+.admin-check input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .password-wrap {
